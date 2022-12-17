@@ -1,0 +1,66 @@
+{
+  "name": "evolve-electron",
+  "version": "1.0.0",
+  "description": "an electron version of evolve game",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make"
+  },
+  "author": "销锋镝铸",
+  "license": "MIT",
+  "devDependencies": {
+    "@electron-forge/cli": "^6.0.0-beta.67",
+    "@electron-forge/maker-deb": "^6.0.0-beta.67",
+    "@electron-forge/maker-rpm": "^6.0.0-beta.67",
+    "@electron-forge/maker-squirrel": "^6.0.0-beta.67",
+    "@electron-forge/maker-zip": "^6.0.0-beta.67",
+    "electron": "^21.2.0"
+  },
+  "dependencies": {
+    "electron-chrome-extensions": "^3.9.0",
+    "electron-prompt": "^1.7.0",
+    "electron-squirrel-startup": "^1.0.0",
+    "electron-store": "^8.1.0"
+  },
+  "config": {
+    "forge1": {
+      "packagerConfig": {
+        "appVersion": "1.0.0",
+        "name": "evolve-electron",
+        "appCopyright": "销锋镝铸",
+        "icon": "MegaEvolve/evolved.ico",
+        "win32metadata": {
+          "ProductName": "evolve-electron",
+          "CompanyName": "销锋镝铸",
+          "FileDescription": "evolve-electron by 销锋镝铸"
+        }
+      },
+      "makers": [
+        {
+          "name": "@electron-forge/maker-squirrel",
+          "config": {
+            "name": "evolve_electron",
+            "iconUrl": "https://github.com/XiaofengdiZhu/MegaEvolve/raw/master/evolved.ico",
+            "skipUpdateIcon": true
+          }
+        },
+        {
+          "name": "@electron-forge/maker-zip",
+          "platforms": [
+            "darwin"
+          ]
+        },
+        {
+          "name": "@electron-forge/maker-deb",
+          "config": {}
+        },
+        {
+          "name": "@electron-forge/maker-rpm",
+          "config": {}
+        }
+      ]
+    }
+  }
+}
