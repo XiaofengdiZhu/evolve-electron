@@ -30,6 +30,20 @@ Because most modern web browsers limit the web games running in the background, 
 ## Screenshot 截图
 ![screenshot 截图](screenshot.png)
 
+## Build Commands 构建命令
+1. Install dependencies. 安装依赖。
+```
+npm install
+```
+2. Test is it ok. 测试能否正常运行。
+```
+npm start
+```
+3. Build a squirrel installer. 构建一个squirrel安装程序。
+```
+npm run make
+```
+
 ## Key codes 关键代码
 This application use below codes to improve background performance:
 这个软件使用以下代码来提升后台性能：
