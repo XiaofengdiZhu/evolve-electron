@@ -9,7 +9,7 @@
     "make": "electron-forge make"
   },
   "author": "销锋镝铸",
-  "license": "MIT",
+  "license": "MPL2.0",
   "devDependencies": {
     "@electron-forge/cli": "^6.0.0-beta.67",
     "@electron-forge/maker-deb": "^6.0.0-beta.67",
