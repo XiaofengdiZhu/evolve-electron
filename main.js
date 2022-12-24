@@ -163,8 +163,8 @@ app.on('web-contents-created', (event, contents) => {
         }
     });
     contents.on('render-process-gone', (event, details) => {
-        dialog.showErrorBox(contents.getTitle(),"渲染进程崩溃了，已尝试刷新页面\n错误代码：" + details.exitCode + "\n原因：" + details.reason);
         contents.reload();
+        dialog.showErrorBox(contents.getTitle(),"渲染进程崩溃了，已尝试刷新页面\n错误代码：" + details.exitCode + "\n原因：" + details.reason);
     });
 })
 
