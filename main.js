@@ -29,7 +29,8 @@ const createMainWindow = () => {
         height: store.get("mainWindow.bounds.height") ?? 800,
         x: store.get("mainWindow.bounds.x") ?? undefined,
         y: store.get("mainWindow.bounds.y") ?? undefined,
-        autoHideMenuBar: store.get("mainWindow.autoHideMenuBar") ?? false
+        autoHideMenuBar: store.get("mainWindow.autoHideMenuBar") ?? false,
+        backgroundColor: nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"#292a2d":"#ffffff"
         /*webPreferences: {
             preload: path.join(__dirname, 'preload.js')
         }*/
@@ -141,7 +142,8 @@ app.on('web-contents-created', (event, contents) => {
                     icon: __dirname + '/MegaEvolve/evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico',
                     width:1080,
                     height:800,
-                    autoHideMenuBar: true
+                    autoHideMenuBar: true,
+                    backgroundColor: nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"#292a2d":"#ffffff"
                 }
             }
         } else {
@@ -236,6 +238,7 @@ function setMainMenu() {
                                 nativeTheme.themeSource = "system";
                                 BrowserWindow.getAllWindows().forEach((win) => {
                                     win.setIcon(__dirname + '/MegaEvolve/evolved'+(nativeTheme.shouldUseDarkColors?"-light":"")+'.ico');
+                                    win.setBackgroundColor(nativeTheme.shouldUseDarkColors?"#292a2d":"#ffffff");
                                 });
                                 store.set("mainWindow.theme", "system");
                             }
@@ -248,6 +251,7 @@ function setMainMenu() {
                                 nativeTheme.themeSource = "light";
                                 BrowserWindow.getAllWindows().forEach((win) => {
                                     win.setIcon(__dirname + '/MegaEvolve/evolved.ico');
+                                    win.setBackgroundColor("#ffffff");
                                 });
                                 store.set("mainWindow.theme", "light");
                             }
@@ -260,6 +264,7 @@ function setMainMenu() {
                                 nativeTheme.themeSource = "dark";
                                 BrowserWindow.getAllWindows().forEach((win) => {
                                     win.setIcon(__dirname + '/MegaEvolve/evolved-light.ico');
+                                    win.setBackgroundColor("#292a2d");
                                 });
                                 store.set("mainWindow.theme", "dark");
                             }
