@@ -135,7 +135,7 @@ app.on('window-all-closed', () => {
 
 app.on('web-contents-created', (event, contents) => {
     contents.setWindowOpenHandler(({url,features}) => {
-        if (url.toLowerCase().endsWith("evolve/wiki.html")) {
+        if (url.toLowerCase().split("#")[0].endsWith("evolve/wiki.html")) {
             return {
                 action: "allow",
                 overrideBrowserWindowOptions:{
@@ -154,7 +154,7 @@ app.on('web-contents-created', (event, contents) => {
         }
     });
     contents.on('will-navigate', (event,url) => {
-        url = url.toLowerCase();
+        url = url.toLowerCase().split("#")[0];
         if (url.endsWith("evolve/") || url.endsWith("evolve/index.html") || url.endsWith("evolve/wiki.html")) {
 
         } else {
