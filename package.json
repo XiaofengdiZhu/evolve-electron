@@ -1,6 +1,6 @@
 {
   "name": "evolve-electron",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "an electron version of evolve game",
   "main": "main.js",
   "scripts": {
@@ -27,7 +27,7 @@
   "config": {
     "forge1": {
       "packagerConfig": {
-        "appVersion": "1.0.0",
+        "appVersion": "1.0.1",
         "name": "evolve-electron",
         "appCopyright": "销锋镝铸",
         "icon": "MegaEvolve/evolved.ico",
