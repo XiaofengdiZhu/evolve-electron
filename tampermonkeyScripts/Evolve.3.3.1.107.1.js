@@ -15741,9 +15741,9 @@
             }
             let timePassed = currentSec - state.soulGemIncomes[0].sec;
             resources.Soul_Gem.rateOfChange = gems / timePassed;
-            let gph = gems / timePassed * 3600*(game.global.frameFactor?game.global.frameFactor:1);
+            let gph = gems / timePassed * 60*(game.global.frameFactor?game.global.frameFactor:1);
             if (gph >= 1000) { gph = Math.round(gph); }
-            $("#resSoul_Gem span:eq(2)").text(`${gems > 0 && currentSec <= 3600 ? '~' : ''}${getNiceNumber(gph)} /h`);
+            $("#resSoul_Gem span:eq(2)").text(`${gems > 0 && currentSec <= 3600 ? '~' : ''}${getNiceNumber(gph)} /m`);
         }
 
         // Previous game stats
