@@ -11214,7 +11214,7 @@
               .filter(mech => mech.size === 'collector')
               .reduce((sum, mech) => sum + (mech.power * MechManager.collectorValue), 0);
             if (supplyCollected > 0) {
-                notes.push(`补给获取：${getNiceNumber(supplyCollected)}/s`);
+                notes.push(`补给获取：${getNiceNumber(supplyCollected)}/s（加速前）`);
             }
         }
 
