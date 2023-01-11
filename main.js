@@ -14,12 +14,15 @@ const path = require('path');
 const fs = require('fs');
 const Store = require('electron-store');
 const prompt = require('electron-prompt');
+const log = require('electron-log');
 const { autoUpdater } = require("electron-updater");
 
 if (require('electron-squirrel-startup')) return app.quit();
 
 const store = new Store();
 let userDataPath = app.getPath("userData");
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
 
 let mainWindow,mainWindowID,mainWindowWebContents;
 const createMainWindow = () => {
@@ -57,6 +60,30 @@ const createMainWindow = () => {
     mainWindow.on('page-title-updated', (event) => {
         event.preventDefault();
     });
+    autoUpdater.on('update-available',(info)=>{
+        new Notification({
+            title: "evolve-electron",
+            body: "新版本"+info.version+"可用，正在自动下载",
+            icon: __dirname + '/MegaEvolve/evolved-withBackground.ico',
+            timeoutType: "default"
+        }).show();
+    });
+    autoUpdater.on('error', (err) => {
+        new Notification({
+            title: "evolve-electron",
+            body: "自动更新出错："+err.message,
+            icon: __dirname + '/MegaEvolve/evolved-withBackground.ico',
+            timeoutType: "default"
+        }).show();
+    });
+    autoUpdater.on('update-downloaded', (info) => {
+        new Notification({
+            title: "evolve-electron",
+            body: "已下载新版本"+info.version+"，将在下次打开时自动安装",
+            icon: __dirname + '/MegaEvolve/evolved-withBackground.ico',
+            timeoutType: "default"
+        }).show();
+    });
     mainWindowWebContents = mainWindow.webContents;
     if(store.get("stopBackgroundThrottling")??true)mainWindowWebContents.backgroundThrottling = false;
     mainWindowWebContents.on('dom-ready', () => {
@@ -85,6 +112,9 @@ const createMainWindow = () => {
 function firstLoadPage() {
     if (store.get("enableTampermonkeyScripts")) {
         LoadTampermonkeyScript(true, true);
+        if(store.get("openAutoUpdate")??true){
+            autoUpdater.checkForUpdatesAndNotify().then();
+        }
     }
 }
 
@@ -101,11 +131,11 @@ nativeTheme.themeSource = store.get("mainWindow.theme") ?? "system";
 
 app.setAboutPanelOptions({
     applicationName: app.name,
-    applicationVersion: "v"+app.getVersion(),
+    applicationVersion: app.getVersion(),
     copyright: "by 销锋镝铸",
     credits: "an Electron app that you can play Evolve in it.\n一个用于玩Evolve的Electron套壳软件",
     iconPath: __dirname + '/MegaEvolve/evolved.ico',
-    website:"https://github.com/XiaofengdiZhu/MegaEvolve"
+    website:"https://github.com/XiaofengdiZhu/evolve-electron"
 });
 
 let powerSaveBlockerID = null;
@@ -421,9 +451,50 @@ function setMainMenu() {
             label: "关于",
             submenu:[
                 {
+                    label:"立即检测更新",
+                    click(){
+                        autoUpdater.checkForUpdates().then((result)=>{
+                            if(result){
+                                dialog.showMessageBox({
+                                    type:"question",
+                                    cancelId:1,
+                                    buttons:["是","否"],
+                                    message: "检测到新版本"+result.updateInfo.version+"，是否前往下载？"
+                                }).then((response)=>{
+                                    if(response.response===0){
+                                        shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron/releases");
+                                    }
+                                });
+                            }else{
+                                new Notification({
+                                    title: "evolve-electron",
+                                    body: "未检测到新版本或检测失败",
+                                    silent: true,
+                                    icon: __dirname + '/MegaEvolve/evolved-withBackground.ico',
+                                    timeoutType: "default"
+                                }).show();
+                            }
+                        });
+                    }
+                },
+                {
+                    label: "开启自动更新",
+                    type: "checkbox",
+                    checked: store.get("openAutoUpdate")??true,
+                    click() {
+                        if(store.get("openAutoUpdate")??true){
+                            store.set("openAutoUpdate",false);
+                        }else{
+                            store.set("openAutoUpdate",true);
+                            autoUpdater.checkForUpdatesAndNotify().then();
+                        }
+                    }
+                },
+                {type: 'separator'},
+                {
                     label:"Github",
                     click(){
-                        shell.openExternal("https://github.com/XiaofengdiZhu/MegaEvolve");
+                        shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron");
                     }
                 },
                 {
