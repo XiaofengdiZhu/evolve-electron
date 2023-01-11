@@ -14,6 +14,7 @@ const path = require('path');
 const fs = require('fs');
 const Store = require('electron-store');
 const prompt = require('electron-prompt');
+const { autoUpdater } = require("electron-updater");
 
 if (require('electron-squirrel-startup')) return app.quit();
 
@@ -166,7 +167,12 @@ app.on('web-contents-created', (event, contents) => {
     });
     contents.on('render-process-gone', (event, details) => {
         contents.reload();
-        dialog.showErrorBox(contents.getTitle(),"渲染进程崩溃了，已尝试刷新页面\n错误代码：" + details.exitCode + "\n原因：" + details.reason);
+        new Notification({
+            title: "evolve-electron",
+            body: "渲染进程崩溃了，已尝试刷新页面\n错误代码：" + details.exitCode + "；原因：" + details.reason,
+            icon: __dirname + '/MegaEvolve/evolved-withBackground.ico',
+            timeoutType: "default"
+        }).show();
     });
 })
 
@@ -372,7 +378,7 @@ function setMainMenu() {
                             appMenu.getMenuItemById("reloadScripts").enabled = false;
                             appMenu.getMenuItemById("openScriptsFolder").enabled = false;
                             appMenu.getMenuItemById("scriptsList").enabled = false;
-                            dialog.showMessageBox({message: "脚本功能已关闭，重启生效"});
+                            dialog.showMessageBox({message: "脚本功能已关闭，重启生效"}).then();
                         } else {
                             store.set("enableTampermonkeyScripts", true);
                             appMenu.getMenuItemById("reloadScripts").enabled = true;

@@ -1,28 +1,69 @@
 {
   "name": "evolve-electron",
-  "version": "1.0.1",
+  "version": "v1.0.1",
   "description": "an electron version of evolve game",
+  "homepage": "https://github.com/XiaofengdiZhu/evolve-electron",
   "main": "main.js",
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
   },
   "author": "销锋镝铸",
-  "license": "MPL2.0",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/XiaofengdiZhu/evolve-electron.git"
+  },
+  "build": {
+    "appId": "xfdz.evolve-electron",
+    "copyright": "Copyright © 2023 销锋镝铸",
+    "files": [
+      "MegaEvolve/**",
+      "index.html",
+      "main.js",
+      "preload.js"
+    ],
+    "win": {
+      "publish": [{
+        "provider": "github",
+        "owner": "XiaofengdiZhu",
+        "repo": "evolve-electron"
+      }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "uninstallDisplayName": "${name}",
+      "runAfterFinish": false
+    }
+  },
   "devDependencies": {
     "@electron-forge/cli": "^6.0.0-beta.67",
     "@electron-forge/maker-deb": "^6.0.0-beta.67",
     "@electron-forge/maker-rpm": "^6.0.0-beta.67",
     "@electron-forge/maker-squirrel": "^6.0.0-beta.67",
     "@electron-forge/maker-zip": "^6.0.0-beta.67",
-    "electron": "^21.2.0"
+    "electron": "^21.2.0",
+    "electron-builder": "^23.6.0"
   },
   "dependencies": {
     "electron-chrome-extensions": "^3.9.0",
     "electron-prompt": "^1.7.0",
     "electron-squirrel-startup": "^1.0.0",
-    "electron-store": "^8.1.0"
+    "electron-store": "^8.1.0",
+    "electron-updater": "^5.3.0"
   },
   "config": {
     "forge1": {
