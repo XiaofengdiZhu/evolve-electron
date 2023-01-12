@@ -14,8 +14,10 @@ const path = require('path');
 const fs = require('fs');
 const Store = require('electron-store');
 const prompt = require('electron-prompt');
+const { v4: uuidv4 } = require('uuid');
 const log = require('electron-log');
 const { autoUpdater } = require("electron-updater");
+const ga4mp = require("./ga4mp.js");
 
 if (require('electron-squirrel-startup')) return app.quit();
 
@@ -23,8 +25,9 @@ const store = new Store();
 let userDataPath = app.getPath("userData");
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
+let ga4;
 
-let mainWindow,mainWindowID,mainWindowWebContents;
+    let mainWindow,mainWindowID,mainWindowWebContents;
 const createMainWindow = () => {
     mainWindow = new BrowserWindow({
         icon: __dirname + '/MegaEvolve/evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico',
@@ -115,6 +118,14 @@ function firstLoadPage() {
         if(store.get("openAutoUpdate")??true){
             autoUpdater.checkForUpdatesAndNotify().then();
         }
+        let events = [];
+        if(!store.has("userID")){
+            store.set("userID",uuidv4());
+            events.push({name : "sign_up",params :{"method": "Windows"}})
+        }
+        ga4 = ga4mp.createClient("CZTsXj0VQGy8EV4NDF9Kiw", "G-K2QN2S0MSK", "evolve-electron", store.get("userID"));
+        events.push({name : "login",params :{"method": "Windows"}});
+        ga4.send(events);
     }
 }
 
@@ -162,6 +173,12 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
     app.quit();
+})
+
+app.on('quit', () => {
+    if(ga4){
+        ga4.send({name:"tutorial_complete"});
+    }
 })
 
 app.on('web-contents-created', (event, contents) => {
