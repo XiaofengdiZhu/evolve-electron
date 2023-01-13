@@ -269,7 +269,7 @@
             let backupString = LZString.decompressFromUTF16(localStorage.getItem('evolveBak'));
             if (backupString) {
                 let oldGlobal = JSON.parse(backupString);
-                let statsData = {race: oldGlobal.race.species, game_days_played: oldGlobal.stats.days};
+                let statsData = {race: oldGlobal.race.species, game_days_played: oldGlobal.stats.days, nextStartTime: new Date().getTime()};
                 if (oldGlobal.stats.plasmid > 0) {
                     statsData.plasmid_earned = oldGlobal.stats.plasmid;
                 }
@@ -340,6 +340,12 @@
                     var calData = (i == 0) ? (evolve.global.stats[label.slice(0,-7)] - value) : (historyData[i-1][label] - value);
                     if(calData == 0) continue;
                     $("#recoList").append($(`<tr><td class="has-text-warning">${evolve.loc("achieve_stats_" + label)}</td><td>${calData}</td></tr>`));
+                }
+                else if(label=="nextStartTime"){
+                    if(i<historyData.length-1 && historyData[i+1].nextStartTime)
+                    {
+                        $("#recoList").append($(`<tr><td class="has-text-warning">历时：</td><td>${((value-historyData[i+1].nextStartTime)/3600000).toFixed(4)}小时</td></tr>`));
+                    }
                 }
                 else
                 {
