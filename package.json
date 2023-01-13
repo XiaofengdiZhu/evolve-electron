@@ -23,6 +23,7 @@
     "files": [
       "MegaEvolve/**",
       "index.html",
+      "ga4mp.js",
       "main.js",
       "preload.js"
     ],
