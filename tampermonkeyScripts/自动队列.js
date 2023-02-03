@@ -55,7 +55,7 @@
         if (++intervalTimes > 500) {
             var intervalId_temp = intervalId
             intervalTimes = 0;
-            intervalId = window.setInterval(SeqCollider, 2000);
+            intervalId = window.setInterval(intervalId, 2000);
             clearInterval(intervalId_temp)
             return;
         }
