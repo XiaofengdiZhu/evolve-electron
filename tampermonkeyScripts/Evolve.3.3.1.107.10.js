@@ -1048,7 +1048,7 @@
                 return false;
             }
 
-            let optionsNode = document.querySelector("#space-star_dock .special");
+            let optionsNode = game.virtualTree.find(el=>el.id==="space-star_dock");
             let title = typeof game.actions.space.spc_gas.star_dock.title === 'function' ? game.actions.space.spc_gas.star_dock.title() : game.actions.space.spc_gas.star_dock.title;
             WindowManager.openModalWindowWithCallback(optionsNode, title, () => {
                 buildings.GasSpaceDockProbe.cacheOptions();
@@ -5188,6 +5188,9 @@
             this.openedByScript = true;
             this._callbackWindowTitle = callbackWindowTitle;
             this._callbackFunction = callbackFunction;
+            if(elementToClick.special){
+                elementToClick.special()
+            }else
             elementToClick.click()
         },
 
