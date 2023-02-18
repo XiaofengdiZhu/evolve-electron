@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         evolve历史数据统计
 // @namespace    http://tampermonkey.net/
-// @version      1.4.4.10
+// @version      1.4.4.10 for 超进化
 // @description  try to take over the world!
 // @downloadURL  https://github.com/DSLM/evolve-script/raw/master/history/evolve_history.user.js
 // @author       DSLM

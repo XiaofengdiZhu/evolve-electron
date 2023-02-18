@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         自动队列
-// @version      0.1.0
+// @version      1.0 for 超进化
 // @author       销锋镝铸
 // ==/UserScript==
 

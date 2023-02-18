@@ -456,6 +456,12 @@ function setMainMenu() {
                     click() {
                         shell.openPath(path.join(userDataPath, 'tampermonkeyScripts'));
                     }
+                },{
+                    label: "下载超进化脚本",
+                    id: "openMegaEvolveScriptsWebsite",
+                    click() {
+                        shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron/tree/main/tampermonkeyScripts");
+                    }
                 }, {
                     label: "脚本列表",
                     id: 'scriptsList',

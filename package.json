@@ -1,6 +1,6 @@
 {
   "name": "evolve-electron",
-  "version": "v1.2.0",
+  "version": "v1.2.1",
   "description": "an electron version of evolve game",
   "homepage": "https://github.com/XiaofengdiZhu/evolve-electron",
   "main": "main.js",

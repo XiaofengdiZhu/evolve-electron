@@ -8,7 +8,7 @@ Because most modern web browsers limit the web games running in the background, 
 
 ## Fetchers 特色
 * Full speed in background.即使在后台也全速运行。
-* Support multiple game source and provide an inside [speed-up version](https://github.com/XiaofengdiZhu/MegaEvolve).支持多种游戏来源，并提供一个内置[加速版本](https://github.com/XiaofengdiZhu/MegaEvolve)。
+* Support multiple game source and provide an inside [speed-up version](https://github.com/XiaofengdiZhu/MegaEvolve).支持多种游戏来源，并提供一个内置加速版本[超进化](https://github.com/XiaofengdiZhu/MegaEvolve)。
 * Support scripts with some limitations.支持脚本（有限制）。
 * Light and dark theme.亮色、暗色主题。
 
@@ -19,13 +19,17 @@ Because most modern web browsers limit the web games running in the background, 
 把你的Tampermonkey脚本放到打开的文件夹，脚本必须至少有以下代码（示例）：
 ```js
 // @name         evolve历史数据统计
-// @version      1.4.4.9
+// @version      1.4.4.10
 // @author       DSLM
 ```
 3. If the script includes `// @require`, you must copy the required codes into this script, like what I did for the [evolve历史数据统计](https://github.com/XiaofengdiZhu/evolve-electron/blob/master/tampermonkeyScripts/历史数据统计.1.4.4.9.js#L19).
 如果脚本中包含`// @require`，你必须复制它所require的代码到此脚本里，就像我为[evolve历史数据统计](https://github.com/XiaofengdiZhu/evolve-electron/blob/master/tampermonkeyScripts/历史数据统计.1.4.4.9.js#L19)做的一样。
 4. Click `脚本` button on the menubar, click `重新加载并刷新` button, hover pointer on `脚本列表` then check your scripts.
 点击菜单栏的`脚本`按钮，点击`重新加载并刷新`按钮，将鼠标移到`脚本列表`上，勾选你的脚本。
+> **Attention 注意**  
+> For now, this app can not update the latest adapted scripts for MegaEvolve, if someday you find out the adapted scripts works badly, please download the latest scripts from here:
+> 目前这个软件无法自动更新超进化适配脚本，如果有一天你感觉脚本运行有问题，请从下面链接下载最新版脚本：  
+> https://github.com/XiaofengdiZhu/evolve-electron/tree/main/tampermonkeyScripts
 
 ## Screenshot 截图
 ![screenshot 截图](screenshot.png)
@@ -33,15 +37,15 @@ Because most modern web browsers limit the web games running in the background, 
 ## Build Commands 构建命令
 1. Install dependencies. 安装依赖。
 ```
-npm install
+yarn install
 ```
 2. Test is it ok. 测试能否正常运行。
 ```
-npm start
+yarn start
 ```
-3. Build a squirrel installer. 构建一个squirrel安装程序。
+3. Build a installer. 构建一个安装程序。
 ```
-npm run make
+node.exe builder.js
 ```
 
 ## Key codes 关键代码

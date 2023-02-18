@@ -11,6 +11,8 @@ const Platform = builder.Platform
  * @see https://www.electron.build/configuration/configuration
  */
 const options = {
+    "appId": "xfdz.evolve-electron",
+    "copyright": "Copyright © 2023 销锋镝铸",
     // "store” | “normal” | "maximum". - For testing builds, use 'store' to reduce build time significantly.
     compression: "maximum",
     removePackageScripts: true,
