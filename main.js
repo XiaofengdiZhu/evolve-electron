@@ -27,7 +27,7 @@ autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
 let ga4;
 
-    let mainWindow,mainWindowID,mainWindowWebContents;
+let mainWindow,mainWindowID,mainWindowWebContents;
 const createMainWindow = () => {
     mainWindow = new BrowserWindow({
         icon: __dirname + '/MegaEvolve/evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico',
@@ -148,7 +148,7 @@ app.setAboutPanelOptions({
     iconPath: __dirname + '/MegaEvolve/evolved.ico',
     website:"https://github.com/XiaofengdiZhu/evolve-electron"
 });
-
+app.enableSandbox();
 let powerSaveBlockerID = null;
 app.whenReady().then(() => {
     if(store.get("powerSaveBlocker")??true){
@@ -527,12 +527,13 @@ function setMainMenu() {
 let loadedTampermonkeyScript = false;
 let tampermonkeyScriptList = [];
 let tempScriptList = [];
-
+let cachedSciptDataList =[];
 function LoadTampermonkeyScript(force = false, exeImme = false) {
     if (loadedTampermonkeyScript && !force) {
         return;
     }
     tempScriptList = [];
+    cachedSciptDataList = [];
     fs.readdir(path.join(userDataPath, 'tampermonkeyScripts'), (error, files) => {
         if (error) {
             console.log(error);
@@ -587,6 +588,7 @@ function LoadTampermonkeyScript(force = false, exeImme = false) {
                         if (exeImme && store.get("tampermonkeyScripts."+fullName)) {
                             mainWindow.webContents.executeJavaScript(data);
                         }
+                        cachedSciptDataList.push({fullName: fullName, data: data});
                     }
                     data = null;
                 }
@@ -610,7 +612,7 @@ function LoadTampermonkeyScript(force = false, exeImme = false) {
 function executeTampermonkeyScriptList() {
     tampermonkeyScriptList.forEach(item => {
         if (item.fullName) {
-            fs.readFile(path.join(userDataPath, 'tampermonkeyScripts', item.file), (error, data) => {
+            /*fs.readFile(path.join(userDataPath, 'tampermonkeyScripts', item.file), (error, data) => {
                 if (error) {
                     console.log(error);
                     let menu = Menu.getApplicationMenu().getMenuItemById(item.fullName);
@@ -622,7 +624,13 @@ function executeTampermonkeyScriptList() {
                     }
                     data = null;
                 }
-            });
+            });*/
+            if(store.get("tampermonkeyScripts."+item.fullName)){
+                let cachedData = cachedSciptDataList.find(cached => cached.fullName === item.fullName);
+                if(cachedData){
+                    mainWindow.webContents.executeJavaScript(cachedData.data);
+                }
+            }
         }
     });
 }
