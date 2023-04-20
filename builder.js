@@ -23,7 +23,9 @@ const options = {
         "index.html",
         "ga4mp.js",
         "main.js",
-        "preload.js"
+        "preload.js",
+        "tampermonkeyScripts/**",
+        "electron-prompt/**"
     ],
 
     win: {
