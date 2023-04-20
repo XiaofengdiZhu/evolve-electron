@@ -1741,13 +1741,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron-prompt@npm:^1.7.0":
-  version: 1.7.0
-  resolution: "electron-prompt@npm:1.7.0::__archiveUrl=https%3A%2F%2Fregistry.npm.taobao.org%2Felectron-prompt%2F-%2Felectron-prompt-1.7.0.tgz"
-  checksum: 1af2868ad47987e9e35243c3b1745ce2f2ff65d35f2ed7b6a5bd2e0c545e08889b57aaf4c496ccfd5fb73e181ebe10cb2f612ba89344ae1c3f3dd1b90eddf6a2
-  languageName: node
-  linkType: hard
-
 "electron-publish@npm:23.6.0":
   version: 23.6.0
   resolution: "electron-publish@npm:23.6.0::__archiveUrl=https%3A%2F%2Fregistry.npm.taobao.org%2Felectron-publish%2F-%2Felectron-publish-23.6.0.tgz"
@@ -1915,7 +1908,6 @@ __metadata:
     electron-builder: ^23.6.0
     electron-chrome-extensions: ^3.10.0
     electron-log: ^4.4.8
-    electron-prompt: ^1.7.0
     electron-squirrel-startup: ^1.0.0
     electron-store: ^8.1.0
     electron-updater: ^5.3.0

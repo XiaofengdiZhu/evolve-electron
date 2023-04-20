@@ -13,7 +13,7 @@ const {
 const path = require('path');
 const fs = require('fs');
 const Store = require('electron-store');
-const prompt = require('electron-prompt');
+const prompt = require('./electron-prompt/index.js');
 const { v4: uuidv4 } = require('uuid');
 const log = require('electron-log');
 const { autoUpdater } = require("electron-updater");
