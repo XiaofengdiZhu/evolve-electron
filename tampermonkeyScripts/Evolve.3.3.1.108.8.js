@@ -5449,11 +5449,15 @@
         },
 
         dragMech(oldId, newId) {
-            let sortObj = {oldDraggableIndex: oldId, newDraggableIndex: newId, from: {querySelectorAll: () => [], insertBefore: () => false}};
-            if (typeof unsafeWindow !== 'undefined') { // Yet another FF fix
-                win.Sortable.get(this._listVue.$el).options.onEnd(cloneInto(sortObj, unsafeWindow, {cloneFunctions: true}));
-            } else {
-                Sortable.get(this._listVue.$el).options.onEnd(sortObj);
+            if(this._listVue.drag){
+                this._listVue.drag(oldId,newId);
+            }else{
+                let sortObj = {oldDraggableIndex: oldId, newDraggableIndex: newId, from: {querySelectorAll: () => [], insertBefore: () => false}};
+                if (typeof unsafeWindow !== 'undefined') { // Yet another FF fix
+                    win.Sortable.get(this._listVue.$el).options.onEnd(cloneInto(sortObj, unsafeWindow, {cloneFunctions: true}));
+                } else {
+                    Sortable.get(this._listVue.$el).options.onEnd(sortObj);
+                }
             }
         }
     }
@@ -17212,13 +17216,15 @@
     }
 
     function createMechInfo() {
+        if(!settings.quickToggles)return;
         if ($(`#mechList .mechRow[draggable=true]`).length > 0) {
             return;
         }
         if (MechManager.isActive || MechManager.initLab()) {
             MechManager.mechObserver.disconnect();
             let list = getVueById("mechList");
-            for (let i = 0; i < list._vnode.children.length; i++) {
+            let length = Math.min(list._vnode.children.length,game.global.portal.mechbay.mechs.length)
+            for (let i = 0; i < length; i++) {
                 let mech = game.global.portal.mechbay.mechs[i];
                 let stats = MechManager.getMechStats(mech);
                 let rating = stats.power / MechManager.bestMech[mech.size].power;
@@ -17243,6 +17249,7 @@
     }
 
     function removeMechInfo() {
+        if(!settings.quickToggles)return;
         MechManager.mechObserver.disconnect();
         $('#mechList .ea-mech-info').remove();
     }
