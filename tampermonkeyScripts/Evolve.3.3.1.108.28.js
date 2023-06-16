@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Evolve
 // @namespace    http://tampermonkey.net/
-// @version      3.3.1.108.8 for 超进化
+// @version      3.3.1.108.28 for 超进化
 // @description  try to take over the world!
 // @downloadURL  https://gist.github.com/Vollch/b1a5eec305558a48b7f4575d317d7dd1/raw/evolve_automation.user.js
 // @updateURL    https://gist.github.com/Vollch/b1a5eec305558a48b7f4575d317d7dd1/raw/evolve_automation.meta.js
@@ -413,6 +413,9 @@
         isDemanded() {
             return this.requestedQuantity > this.currentQuantity;
         }
+        get income() {
+            return this.calculateRateOfChange({buy: false, all: true});
+        }
 
         get spareQuantity() {
             return this.currentQuantity - this.requestedQuantity;
@@ -477,11 +480,11 @@
             if (workersCount > 0) {
                 let totalIncome = this.getProduction(workersSource, locArg);
                 let resPerWorker = totalIncome / workersCount;
-                let usedIncome = totalIncome - this.calculateRateOfChange({buy: false, all: true});
+                let usedIncome = totalIncome - this.income;
                 if (usedIncome > 0) {
                     newWorkers = Math.ceil(usedIncome / resPerWorker);
                 }
-            } else if (this.calculateRateOfChange({buy: false, all: true}) < 0) {
+            } else if (this.income < 0) {
                 newWorkers = 1;
             }
 
@@ -516,7 +519,7 @@
             if (this.storageRatio > 0.98) {
                 return Number.MIN_SAFE_INTEGER; // Already full.
             }
-            let totalRateOfCharge = this.calculateRateOfChange({buy: false, all: true});
+            let totalRateOfCharge = this.income;
             if (totalRateOfCharge <= 0) {
                 return Number.MAX_SAFE_INTEGER; // Won't ever fill with current rate.
             }
@@ -530,7 +533,7 @@
             if (this.storageRequired <= 1) {
                 return 0;
             }
-            let totalRateOfCharge = this.calculateRateOfChange({buy: false, all: true});
+            let totalRateOfCharge = this.income;
             if (totalRateOfCharge <= 0) {
                 return Number.MAX_SAFE_INTEGER; // Won't ever fill with current rate.
             }
@@ -543,6 +546,12 @@
 
             KeyManager.set(false, false, false);
             vue.craft(this.id, count);
+        }
+    }
+    class SoulGem extends Resource {
+        updateData() {
+            super.updateData();
+            this.rateOfChange = state.soulGemPerHour / 3600;
         }
     }
 
@@ -699,21 +708,8 @@
         }
     }
 
-    class StarPower extends Resource {
-        updateData() {
-            if (!this.isUnlocked()) {
-                return;
-            }
 
-            this.currentQuantity = game.global.city.smelter.Star;
-            this.maxQuantity = game.global.city.smelter.StarCap;
-            this.rateOfChange = this.maxQuantity - this.currentQuantity;
-        }
 
-        isUnlocked() {
-            return haveTech("star_forge", 2);
-        }
-    }
 
     class Morale extends Resource {
         updateData() {
@@ -725,6 +721,24 @@
 
         isUnlocked() {
             return true;
+        }
+    }
+    class Thrall extends Resource {
+        updateData() {
+            if (!this.isUnlocked()) {
+                return;
+            }
+            this.currentQuantity = 0;
+            this.rateOfChange = 0;
+            for (let i = 0; i < game.global.city.surfaceDwellers.length; i++) {
+                this.currentQuantity += game.global.city.captive_housing[`race${i}`];
+                this.rateOfChange += game.global.city.captive_housing[`jailrace${i}`];
+            }
+            this.currentQuantity += this.rateOfChange;
+            this.maxQuantity = game.global.city.captive_housing.raceCap;
+        }
+        isUnlocked() {
+            return game.global.city.captive_housing ? true : false;
         }
     }
 
@@ -1399,7 +1413,7 @@
             // Locked races always have zero weighting
             let habitability = this.getHabitability();
             if (habitability < (settings.evolutionAutoUnbound ? 0.8 : 1)) {
-                return 0;
+                return -1;
             }
 
             let weighting = 0;
@@ -1417,7 +1431,7 @@
                 // Check genus pillar for Enlightenment
                 if (this.id !== "custom" && this.id !== "junker" && this.id !== "sludge") {
                     let genusPillar = Math.max(...Object.values(races)
-                      .filter(r => r.id !== "custom" && r.id !== "junker" & r.id !== "sludge")
+                      .filter(r => r.genus === this.genus && r.id !== "custom" && r.id !== "junker" && r.id !== "sludge")
                       .map(r => (game.global.pillars[r.id] ?? 0)));
                     weighting += 10000 * Math.max(0, starLevel - genusPillar);
                 }
@@ -1569,7 +1583,9 @@
                 case "angelic":
                     return game.global.city.biome === 'eden' ? 1 : game.global.blood.unbound >= 3 ? getUnsuitedMod() : 0;
                 case "synthetic":
-                    return game.global.stats.achieve[`obsolete`]?.l >= 5 ? 1 : 0;
+                    return game.global.stats.achieve['obsolete']?.l >= 5 ? 1 : 0;
+                case "eldritch":
+                    return game.global.stats.achieve['nightmare']?.mg ? 1 : 0;
                 case undefined: // Nonexistent custom
                     return 0;
                 default:
@@ -1601,9 +1617,11 @@
                 case "angelic":
                     return "伊甸星球";
                 case "synthetic":
-                    return game.loc('achieve_obsolete_desc');
+                    return game.loc('wiki_achieve_obsolete');
+                case "eldritch":
+                    return game.loc('wiki_achieve_nightmare');
                 case undefined: // Nonexistent custom
-                    return game.loc('achieve_ascended_desc');
+                    return game.loc('wiki_achieve_ascended');
                 default:
                     return "";
             }
@@ -1663,7 +1681,7 @@
                 this.complete = true;
                 return true;
             }
-            if (this.actionType === "build" && buildingIds[this.actionId].count >= this.actionCount) {
+            if (this.actionType === "build" && (buildingIds[this.actionId].isMission() ? Number(buildingIds[this.actionId].isComplete()) : buildingIds[this.actionId].count) >= this.actionCount) {
                 this.complete = true;
                 return true;
             }
@@ -1682,6 +1700,9 @@
                 return true;
             }
             if (this.requirementType === "built" && (buildingIds[this.requirementId].isMission() ? Number(buildingIds[this.requirementId].isComplete()) : buildingIds[this.requirementId].count) >= this.requirementCount) {
+                return true;
+            }
+            if (this.requirementType === "chain" && (this.priority < 1 || TriggerManager.priorityList[this.priority - 1]?.complete)) {
                 return true;
             }
             return false;
@@ -1710,6 +1731,11 @@
             if (this.requirementType === "built") {
                 this.requirementId = "city-basic_housing";
                 this.requirementCount = 1;
+                return;
+            }
+            if (this.requirementType === "chain") {
+                this.requirementId = "";
+                this.requirementCount = 0;
                 return;
             }
         }
@@ -1936,6 +1962,7 @@
         [{id:"inflation", trait:"inflation"}],
         [{id:"sludge", trait:"sludge"}],
         [{id:"orbit_decay", trait:"orbit_decay"}],
+        [{id:"witch_hunter", trait:"witch_hunter"}],
         [{id:"junker", trait:"junker"}],
         [{id:"cataclysm", trait:"cataclysm"}],
         [{id:"banana", trait:"banana"}],
@@ -1944,7 +1971,7 @@
     ];
     const governors = ["soldier", "criminal", "entrepreneur", "educator", "spiritual", "bluecollar", "noble", "media", "sports", "bureaucrat"];
     const evolutionSettingsToStore = ["userEvolutionTarget", "prestigeType", ...challenges.map(c => "challenge_" + c[0].id)];
-    const prestigeNames = {mad: "核爆重置", bioseed: "播种重置", cataclysm: "大灾变重置", vacuum: "真空坍缩", whitehole: "黑洞重置", apocalypse: "人工智能觉醒", ascension: "飞升重置", demonic: "恶魔灌注", terraform: "星球重塑重置", matrix: "矩阵重置", retire: "隐退重置", eden: "伊甸园重置"};
+    const prestigeNames = {mad: "核爆重置", bioseed: "播种重置", cataclysm: "大灾变重置", vacuum: "真空坍缩", whitehole: "黑洞重置", apocalypse: "人工智能觉醒", ascension: "飞升重置", witch_ascension: "巫术飞升", demonic: "恶魔灌注", terraform: "星球重塑重置", matrix: "矩阵重置", retire: "隐退重置", eden: "伊甸园重置"};
     const logIgnore = ["food", "lumber", "stone", "chrysotile", "slaughter", "s_alter", "slave_market", "horseshoe", "assembly", "cloning_facility"];
     const galaxyRegions = ["gxy_stargate", "gxy_gateway", "gxy_gorddon", "gxy_alien1", "gxy_alien2", "gxy_chthonian"];
     const settingsSections = ["toggle", "general", "prestige", "evolution", "research", "market", "storage", "production", "war", "hell", "fleet", "job", "building", "project", "government", "logging", "trait", "weighting", "ejector", "planet", "mech", "magic"];
@@ -1960,6 +1987,7 @@
     var arpaIds = {};
     var jobIds = {};
     var evolutions = {};
+    var imitations = {};
     var races = {};
     var craftablesList = [];
     var foundryList = [];
@@ -1976,9 +2004,11 @@
 
         lastWasteful: null,
         lastHighPop: null,
+        lastFlier: null,
         lastPopulationCount: 0,
         lastFarmerCount: 0,
-
+        astroSign: null,
+        evoCheckNeeded: true,
         warnDebug: true,
         warnPreload: true,
 
@@ -1995,6 +2025,7 @@
         moneyIncomes: [],
         moneyMedian: 0,
         soulGemIncomes: [{sec: 0, gems: 0}],
+        soulGemPerHour: 0,
         soulGemLast: Number.MAX_SAFE_INTEGER,
 
         knowledgeRequiredByTechs: 0,
@@ -2018,6 +2049,8 @@
         Population: new Population("人口", "Population"), // We can't store the full elementId because we don't know the name of the population node until later
         Slave: new Resource("Slave", "Slave"),
         Mana: new Resource("Mana", "Mana"),
+        Energy: new Resource("Energy", "Energy"),
+        Sus: new Resource("Suspicion", "Sus"),
         Knowledge: new Resource("Knowledge", "Knowledge"),
         Zen: new Resource("Zen", "Zen"),
         Crates: new Resource("Crates", "Crates"),
@@ -2063,7 +2096,7 @@
         Horseshoe: new Resource("Horseshoe", "Horseshoe"),
         Nanite: new Resource("Nanite", "Nanite"),
         Genes: new Resource("Genes", "Genes"),
-        Soul_Gem: new Resource("Soul Gem", "Soul_Gem"),
+        Soul_Gem: new SoulGem("Soul Gem", "Soul_Gem"),
 
         // Craftable resources
         Plywood: new Resource("Plywood", "Plywood"),
@@ -2095,8 +2128,8 @@
         // Special not-really-resources-but-we'll-treat-them-like-resources resources
         Supply: new Supply("Supplies", "Supply"),
         Power: new Power("电力", "Power"),
-        StarPower: new StarPower("星辰", "StarPower"),
         Morale: new Morale("士气", "Morale"),
+        Thrall: new Thrall("苦工", "Thrall"),
         Womlings_Support: new WomlingsSupport("众鼬", "Womlings_Support", "", ""),
         Moon_Support: new Support("月球支持", "Moon_Support", "space", "spc_moon"),
         Red_Support: new Support("红色行星支持", "Red_Support", "space", "spc_red"),
@@ -2138,6 +2171,7 @@
         HellSurveyor: new Job("hell_surveyor", "勘探者", {smart: true}),
         SpaceMiner: new Job("space_miner", "太空矿工", {smart: true}),
         PitMiner: new Job("pit_miner", "深坑矿工"),
+        Torturer: new Job("torturer", "施虐者", {smart: true}),
         Archaeologist: new Job("archaeologist", "考古学家"),
         Banker: new Job("banker", "银行家", {smart: true}),
         Priest: new Job("priest", "牧师"),
@@ -2173,6 +2207,7 @@
         SoulWell: new Action("Soul Well", "city", "soul_well", ""),
         SlavePen: new Action("Slave Pen", "city", "slave_pen", ""),
         Transmitter: new Action("Transmitter", "city", "transmitter", "", {housing: true}),
+        CaptiveHousing: new Action("Captive Housing", "city", "captive_housing", ""),
         Farm: new Action("Farm", "city", "farm", "", {housing: true}),
         CompostHeap: new Action("Compost Heap", "city", "compost", ""),
         Mill: new Action("Windmill", "city", "mill", "", {smart: true}),
@@ -2187,6 +2222,7 @@
         Warehouse: new Action("Container Port", "city", "warehouse", ""),
         Bank: new Action("Bank", "city", "bank", ""),
         Pylon: new Action("Pylon", "city", "pylon", ""),
+        ConcealWard: new Action("Conceal Ward (Witch Hunting)", "city", "conceal_ward", ""),
         Graveyard: new Action ("Graveyard", "city", "graveyard", ""),
         LumberYard: new Action("Lumber Yard", "city", "lumber_yard", ""),
         Sawmill: new Action("Sawmill", "city", "sawmill", ""),
@@ -2233,6 +2269,7 @@
         RedMission: new Action("Red Mission", "space", "red_mission", "spc_red"),
         RedSpaceport: new Action("Red Spaceport", "space", "spaceport", "spc_red"),
         RedTower: new Action("Red Space Control", "space", "red_tower", "spc_red"),
+        RedCaptiveHousing: new CityAction("Red Captive Housing (Cataclysm)", "space", "captive_housing", "spc_red"),
         RedTerraformer: new Action("Red Terraformer (Orbit Decay)", "space", "terraformer", "spc_red", {multiSegmented: true}),
         RedAtmoTerraformer: new Action("Red Terraformer (Orbit Decay, Complete)", "space", "atmo_terraformer", "spc_red"),
         RedTerraform: new Action("Red Terraform (Orbit Decay)", "space", "terraform", "spc_red", {prestige: true}),
@@ -2336,6 +2373,7 @@
         TauOrbitalStation: new Action("Tau Orbital Station", "tauceti", "orbital_station", "tau_home"),
         TauColony: new Action("Tau Colony", "tauceti", "colony", "tau_home", {housing: true}),
         TauHousing: new Action("Tau Housing", "tauceti", "tau_housing", "tau_home", {housing: true}),
+        TauCaptiveHousing: new CityAction("Tau Captive Housing", "tauceti", "captive_housing", "tau_home"),
         TauPylon: new Action("Tau Pylon", "tauceti", "pylon", "tau_home"),
         TauCloning: new ResourceAction("Tau Cloning", "tauceti", "cloning_facility", "tau_home", {housing: true}, "Population"),
         TauForgeHorseshoe: new ResourceAction("Tau Horseshoe", "tauceti", "horseshoe", "tau_home", {housing: true, garrison: true}, "Horseshoe"),
@@ -2499,6 +2537,8 @@
         PitSoulForge: new Action("Pit Soul Forge", "portal", "soul_forge", "prtl_pit"),
         PitGunEmplacement: new Action("Pit Gun Emplacement", "portal", "gun_emplacement", "prtl_pit"),
         PitSoulAttractor: new Action("Pit Soul Attractor", "portal", "soul_attractor", "prtl_pit"),
+        PitSoulCapacitor: new Action("Pit Soul Capacitor (Witch Hunting)", "portal", "soul_capacitor", "prtl_pit"),
+        PitAbsorptionChamber: new Action("Pit Absorption Chamber (Witch Hunting)", "portal", "absorption_chamber", "prtl_pit"),
 
         RuinsMission: new Action("Ruins Mission", "portal", "ruins_mission", "prtl_ruins"),
         RuinsGuardPost: new Action("Ruins Guard Post", "portal", "guard_post", "prtl_ruins", {smart: true}),
@@ -2895,7 +2935,7 @@
           () => "无法进行该威望重置",
           () => 0
       ],[
-          () => game.global.race['truepath'] && !isPrestigeAllowed("retire"),
+          () => game.global.race['truepath'] && (!isPrestigeAllowed("retire") || buildings.TauGas2MatrioshkaBrain.count < 1000),
           (building) => building === buildings.TauGas2IgniteGasGiant,
           () => "无法进行该威望重置",
           () => 0
@@ -2923,6 +2963,11 @@
           () => settings.prestigeBioseedConstruct && settings.prestigeType === "ascension" && isPillarFinished(),
           (building) => building === buildings.PitMission || building === buildings.RuinsMission,
           () => "飞升重置不需要建造",
+          () => 0
+      ],[
+          () => game.global.race['witch_hunter'] && settings.prestigeType === "ascension",
+          (building) => building === buildings.SpireWaygate,
+          () => "巫术飞升不需要建造",
           () => 0
       ],[
           () => settings.prestigeBioseedConstruct && settings.prestigeType === "terraform",
@@ -3019,6 +3064,11 @@
           (building) => building.is.random,
           () => "随机权重",
           () => 1 + Math.random() // Fluctuate weight to pick random item
+      ],[
+          () => haveTech("hell_lake", 3),
+          (building) => building._tab === "city" || building._tab === "space" || building._tab === "interstellar",
+          () => "血湖前建筑",
+          () => settings.buildingWeightingAfterLake
       ],[
           () => game.global.race['truepath'] && haveTech('tauceti', 2),
           (building) => building._tab === "city" || building._tab === "space" || building._tab === "starDock",
@@ -3582,7 +3632,7 @@
         _industryVue: undefined,
 
         Productions: addProps({
-            Farmer: {id: 'farmer', isUnlocked: () => !game.global.race['orbit_decayed'] && !game.global.race['cataclysm'] && !game.global.race['carnivore'] && !game.global.race['soul_eater'] && !game.global.race['artifical']},
+            Farmer: {id: 'farmer', isUnlocked: () => !game.global.race['orbit_decayed'] && !game.global.race['cataclysm'] && !game.global.race['carnivore'] && !game.global.race['soul_eater'] && !game.global.race['artifical'] && !game.global.race['unfathomable']},
             Miner: {id: 'miner', isUnlocked: () => !game.global.race['cataclysm']},
             Lumberjack: {id: 'lumberjack', isUnlocked: () => !game.global.race['orbit_decayed'] && !game.global.race['cataclysm'] && isLumberRace() && !game.global.race['evil']},
             Science: {id: 'science', isUnlocked: () => true},
@@ -3668,7 +3718,6 @@
             Oil: {id: "Oil", unlocked: () => game.global.resource.Oil.display, cost: [new ResourceProductionCost(resources.Oil, 0.35, 2)]},
             Coal: {id: "Coal", unlocked: () => game.global.resource.Coal.display, cost: [new ResourceProductionCost(resources.Coal, () => !isLumberRace() ? 0.15 : 0.25, 2)]},
             Wood: {id: "Wood", unlocked: () => isLumberRace() || game.global.race['evil'], cost: [new ResourceProductionCost(() => game.global.race['evil'] ? game.global.race['soul_eater'] && game.global.race.species !== 'wendigo' ? resources.Food : resources.Furs : resources.Lumber, () => game.global.race['evil'] && !game.global.race['soul_eater'] || game.global.race.species === 'wendigo' ? 1 : 3, 6)]},
-            Star: {id: "Star", unlocked: () => haveTech("star_forge", 2), cost: [new ResourceProductionCost(resources.StarPower, 1, 0)]},
             Inferno: {id: "Inferno", unlocked: () => haveTech("smelting", 8), cost: [new ResourceProductionCost(resources.Coal, 50, 50), new ResourceProductionCost(resources.Oil, 35, 50), new ResourceProductionCost(resources.Infernite, 0.5, 50)]},
         }, [ResourceProductionCost]), (f) => f.id, [{s: "smelter_fuel_p_", p: "priority"}]),
 
@@ -3758,7 +3807,10 @@
         },
 
         maxOperating() {
-            return game.global.city.smelter.cap;
+            return game.global.city.smelter.cap - game.global.city.smelter.Star;
+        },
+        extraOperating() {
+            return game.global.city.smelter.Star;
         },
 
         currentFueled() {
@@ -4374,6 +4426,9 @@
             if (game.global.race['infiltrator']){
                 base /= 3;
             }
+            if (state.astroSign === 'scorpio') {
+                base * 0.88;
+            }
             return Math.round(base ** spy) + 500;
         },
 
@@ -4925,8 +4980,11 @@
         },
         avail(ship) {
             let yard = game.global.space.shipyard;
+            if (ship.class === "explorer" && (ship.weapon !== "railgun" || ship.sensor !== "quantum")) {
+                return false;
+            }
             for (let [type, part] of Object.entries(ship)) {
-                if (type !== 'name' && (yard.blueprint[type] !== part || ship.class === "explorer" || yard.blueprint.class === "explorer")) {
+                if (type !== "name" && yard.blueprint[type] !== part && !(ship.class === "explorer" && (part === "weapon" || part === "sensor"))) {
                     if (!this._fleetVue.avail(type, this.ShipConfig[type].indexOf(part), part)) {
                     return false;
                     }
@@ -5627,6 +5685,10 @@
                     project.weighting = 0;
                     project.extraDescription = "资源储量上限不足<br>";
                 }
+                if (project === projects.ManaSyphon && settings.prestigeBioseedConstruct && settings.prestigeType === "witch_ascension") {
+                    project.weighting = 0;
+                    project.extraDescription = "当前重置无需建造<br>";
+                }
 
                 if (settings.arpaScaleWeighting) {
                     project.weighting /= 1 - (0.01 * project.progress);
@@ -5956,7 +6018,9 @@
     }
 
     function updateCraftCost() {
-        if (state.lastWasteful === game.global.race.wasteful && state.lastHighPop === game.global.race.high_pop) {
+        if (state.lastWasteful === game.global.race.wasteful
+                && state.lastHighPop === game.global.race.high_pop
+                && state.lastFlier === game.global.race.flier) {
             return;
         }
         // Construct craftable resource list
@@ -5976,6 +6040,7 @@
         }
         state.lastWasteful = game.global.race.wasteful;
         state.lastHighPop = game.global.race.high_pop;
+        state.lastFlier = game.global.race.flier;
     }
 
     // Gui & Init functions
@@ -6025,6 +6090,8 @@
         buildings.SiriusAscensionMachine.gameMax = 100;
         buildings.SiriusAscensionTrigger.gameMax = 1;
         buildings.PitSoulForge.gameMax = 1;
+        buildings.PitSoulCapacitor.gameMax = 40;
+        buildings.PitAbsorptionChamber.gameMax = 100;
         buildings.GateEastTower.gameMax = 1;
         buildings.GateWestTower.gameMax = 1;
         buildings.RuinsVault.gameMax = 2;
@@ -6259,6 +6326,7 @@
         let mammals = [e.mammals, ...bilateralSymmetry];
 
         let genusEvolution = {
+            eldritch: [e.sentience, e.eldritch, ...bilateralSymmetry],
             aquatic: [e.sentience, e.aquatic, ...bilateralSymmetry],
             insectoid: [e.sentience, e.athropods, ...bilateralSymmetry],
             humanoid: [e.sentience, e.humanoid, ...mammals],
@@ -6290,6 +6358,7 @@
             // Use fungi as default Valdi genus
             let evolutionPath = (id === "junker" || id === "sludge") ? genusEvolution.fungi : genusEvolution[races[id].genus];
             races[id].evolutionTree = [e.bunker, e[id], ...(evolutionPath ?? [])];
+            imitations[id] = new EvolutionAction(`s-${id}`);
         }
     }
 
@@ -6350,9 +6419,13 @@
         priorityList.push(buildings.SoulWell); // Soul Eater trait
         priorityList.push(buildings.SlavePen); // Slaver trait
         priorityList.push(buildings.SlaveMarket); // Slaver trait
+        priorityList.push(buildings.CaptiveHousing); // Unfathomable trait
+        priorityList.push(buildings.RedCaptiveHousing); // Unfathomable trait
+        priorityList.push(buildings.TauCaptiveHousing); // Unfathomable trait
         priorityList.push(buildings.Graveyard); // Evil trait
         priorityList.push(buildings.Shrine); // Magnificent trait
         priorityList.push(buildings.CompostHeap); // Detritivore trait
+        priorityList.push(buildings.ConcealWard); // Witch Hunting only
         priorityList.push(buildings.Pylon); // Magic Universe only
         priorityList.push(buildings.RedPylon); // Magic Universe & Cataclysm only
         priorityList.push(buildings.TauPylon); // Magic Universe & True Path only
@@ -6523,6 +6596,8 @@
         priorityList.push(buildings.PortalCarport);
         priorityList.push(buildings.PitGunEmplacement);
         priorityList.push(buildings.PitSoulAttractor);
+        priorityList.push(buildings.PitSoulCapacitor);
+        priorityList.push(buildings.PitAbsorptionChamber);
         priorityList.push(buildings.PortalRepairDroid);
         priorityList.push(buildings.PitMission);
         priorityList.push(buildings.PitAssaultForge);
@@ -6733,7 +6808,6 @@
             autoPrestige: false,
             tickRate: 4,
             tickSchedule: false,
-            autoAssembleGene: false,
             researchRequest: true,
             researchRequestSpace: false,
             missionRequest: true,
@@ -6744,6 +6818,7 @@
             prioritizeOuterFleet: "ignore",
             buildingAlwaysClick: false,
             buildingClickPerTick: 50,
+            activeTargetsUI: false
         }
 
         applySettings(def, reset);
@@ -6811,12 +6886,6 @@
             userResearchTheology_1: "auto",
             userResearchTheology_2: "auto",
             researchIgnore: ["tech-purify"],
-        }
-        applySettings(def, reset);
-    }
-    function resetAutoFire(reset) {
-        let def = {
-            autoFire: false,
         }
 
         applySettings(def, reset);
@@ -6915,9 +6984,16 @@
         let def = {
             autoMinorTrait: false,
             shifterGenus: "ignore",
+            imitateRace: "ignore",
             buildingShrineType: "know",
             slaveIncome: 25000,
-            jobScalePop: true
+            jobScalePop: true,
+            psychicPower: "auto",
+            psychicBoostRes: "auto",
+            autoGenetics: false,
+            geneticsSequence: "none",
+            geneticsBoost: "none",
+            geneticsAssemble: "auto"
         };
 
         for (let i = 0; i < MinorTraitManager.priorityList.length; i++) {
@@ -6934,8 +7010,9 @@
     }
 
     function resetMutableTraitSettings(reset) {
+        let unobtainableTraits = ["xenophobic", "rigid", "soul_eater"];
         MutableTraitManager.priorityList = Object.entries(game.traits)
-          .filter(([id, trait]) => (trait.type === "major" || trait.type === "genus") && id !== "xenophobic" && id !== "soul_eater")
+          .filter(([id, trait]) => (trait.type === "major" || trait.type === "genus") && !unobtainableTraits.includes(id))
           .map(([id, trait]) => trait.type === "major" ? new MajorTrait(id) : new GenusTrait(id))
           .sort((a, b) => Object.keys(poly.genus_traits).indexOf(a.genus) - Object.keys(poly.genus_traits).indexOf(b.genus) || a.type < b.type);
 
@@ -6970,10 +7047,12 @@
             autoCraftsmen: false,
             jobSetDefault: true,
             jobManageServants: true,
+            scavengerServants: false,
             jobLumberWeighting: 50,
             jobQuarryWeighting: 50,
             jobCrystalWeighting: 50,
             jobScavengerWeighting: 5,
+            jobRaiderWeighting: 20,
             jobDisableMiners: true,
         }
 
@@ -7013,6 +7092,7 @@
         setBreakpoints(jobs.Entertainer, 2, 5, -1);
         setBreakpoints(jobs.HellSurveyor, 1, 1, -1);
         setBreakpoints(jobs.SpaceMiner, 1, 3, -1);
+        setBreakpoints(jobs.Torturer, 1, 1, -1);
         setBreakpoints(jobs.Archaeologist, 1, 1, -1);
         setBreakpoints(jobs.Banker, 3, 5, -1);
         setBreakpoints(jobs.Priest, 0, 0, -1);
@@ -7048,6 +7128,7 @@
             buildingWeightingTemporal: 0.2,
             buildingWeightingSolar: 0.2,
             buildingWeightingOverlord: 0,
+            buildingWeightingAfterLake: 1,
         }
 
         applySettings(def, reset);
@@ -7099,6 +7180,7 @@
         // Limit max for belt ships, and horseshoes
         def['bld_m_' + buildings.ForgeHorseshoe._vueBinding] = 20;
         def['bld_m_' + buildings.RedForgeHorseshoe._vueBinding] = 20;
+        def['bld_m_' + buildings.TauForgeHorseshoe._vueBinding] = 20;
         def['bld_m_' + buildings.BeltEleriumShip._vueBinding] = 15;
         def['bld_m_' + buildings.BeltIridiumShip._vueBinding] = 15;
 
@@ -7143,6 +7225,7 @@
             autoPylon: false,
             magicAlchemyManaUse: 0.5,
             productionRitualManaUse: 0.5,
+            productionRitualSafe: true,
         }
 
         // Alchemy
@@ -7185,7 +7268,8 @@
             productionSmeltingIridium: 0.5,
             productionFactoryMinIngredients: 0,
             replicatorResource: 'Stone',
-            replicatorAssignGovernorTask: true
+            replicatorAssignGovernorTask: true,
+            replicatorAccordingBuildingWeight: false
         }
 
         // Foundry
@@ -7253,7 +7337,7 @@
 
     function resetTriggerSettings(reset) {
         let def = {
-            autoTrigger: false,
+            autoTrigger: false
         }
 
         applySettings(def, reset);
@@ -7292,6 +7376,7 @@
             fleetEmbassyKnowledge: 6000000,
             fleetAlienGiftKnowledge: 6500000,
             fleetAlien2Knowledge: 8500000,
+            fleetAlien2Loses: "none",
             fleetChthonianLoses: "low",
 
             // Default outer regions weighting
@@ -7557,14 +7642,16 @@
         migrateSetting("storagePrioritizedOnly", "storageAssignPart", (v) => !v);
         migrateSetting("fleetScanEris", "fleet_outer_pr_spc_eris", (v) => v ? 100 : 0);
         migrateSetting("jobDisableCraftsmans", "productionCraftsmen", (v) => v ? "nocraft" : "always");
+        migrateSetting("activeTriggerUI", "activeTargetsUI", (v) => v);
+        migrateSetting("autoAssembleGene", "autoGenetics", (v) => v);
         // Migrate setting as override, in case if someone actualy use it
         if (settingsRaw.hasOwnProperty("genesAssembleGeneAlways")) {
             if (settingsRaw.overrides.genesAssembleGeneAlways) {
-                settingsRaw.overrides.autoAssembleGene = settingsRaw.overrides.genesAssembleGeneAlways.concat(settingsRaw.overrides.autoAssembleGene ?? []);
+                settingsRaw.overrides.geneticsAssemble = settingsRaw.overrides.genesAssembleGeneAlways.concat(settingsRaw.overrides.geneticsAssemble ?? []);
             }
             if (!settingsRaw.genesAssembleGeneAlways) {
-                settingsRaw.overrides.autoAssembleGene = settingsRaw.overrides.autoAssembleGene ?? [];
-                settingsRaw.overrides.autoAssembleGene.push({"type1":"ResearchComplete","arg1":"tech-dna_sequencer","type2":"Boolean","arg2":true,"cmp":"==","ret":false});
+                settingsRaw.overrides.geneticsAssemble = settingsRaw.overrides.geneticsAssemble ?? [];
+                settingsRaw.overrides.geneticsAssemble.push({"type1":"ResearchComplete","arg1":"tech-dna_sequencer","type2":"Boolean","arg2":true,"cmp":"==","ret":"none"});
             }
         }
         if (settingsRaw.hasOwnProperty("prestigeWhiteholeEjectAllCount") && settingsRaw.prestigeWhiteholeEjectAllCount <= 20) {
@@ -7580,7 +7667,7 @@
         // Remove deprecated post-overrides settings
         ["res_containers_m_", "res_crates_m_"].forEach(id => Object.values(resources)
           .forEach(res => { delete settingsRaw[id + res.id], delete settingsRaw.overrides[id + res.id] }));
-        ["prestigeWhiteholeEjectAllCount", "prestigeWhiteholeDecayRate", "genesAssembleGeneAlways", "buildingsConflictQueue", "buildingsConflictRQueue", "buildingsConflictPQueue", "fleet_outer_pr_spc_hell", "fleet_outer_pr_spc_dwarf", "prestigeEnabledBarracks", "bld_s2_city-garrison", "prestigeAscensionSkipCustom", "prestigeBioseedGECK", "tickTimeout", "minorTraitSettingsCollapsed", "fleetOuterMinSyndicate"]
+        ["prestigeWhiteholeEjectAllCount", "prestigeWhiteholeDecayRate", "genesAssembleGeneAlways", "buildingsConflictQueue", "buildingsConflictRQueue", "buildingsConflictPQueue", "fleet_outer_pr_spc_hell", "fleet_outer_pr_spc_dwarf", "prestigeEnabledBarracks", "bld_s2_city-garrison", "prestigeAscensionSkipCustom", "prestigeBioseedGECK", "tickTimeout", "minorTraitSettingsCollapsed", "fleetOuterMinSyndicate", "smelter_fuel_p_Star"]
           .forEach(id => { delete settingsRaw[id], delete settingsRaw.overrides[id] });
     }
 
@@ -7765,6 +7852,19 @@
         }
         if (evolutions.organelles.count < 10) {
             evolutions.organelles.click();
+        }
+        const userImitateRace = Object.values(imitations).find(race => {
+            return race.id === `s-${settings.imitateRace}`
+        });
+        if (game.global.race.evoFinalMenu) {
+            if (userImitateRace) {
+                const selectImitateRace = userImitateRace.click();
+                if (!selectImitateRace) {
+                    GameLog.logDanger("special", `${settings.imitateRace}无法用于仿制。请选择可用的种族。`, ['progress', 'achievements']);
+                }
+            } else {
+                GameLog.logDanger("special", `未选择仿制的种族。请选择一个种族以继续。`, ['progress', 'achievements']);
+            }
         }
     }
 
@@ -8040,15 +8140,6 @@
         }
     }
 
-    function autoFire() {
-        if (haveTech("governor") && settings.govGovernor !== "none" && getGovernor() !== "none") {
-            let govOffice = (()=>{try{return document.getElementById("govOffice").__vue__}catch(e){return undefined}})();
-            if (game.global.race.governor?.g?.bg !== settings.govGovernor){
-                govOffice.fire();
-                return;
-            }
-        }
-    }
     function autoMerc() {
         let m = WarManager;
         if (!m._garrisonVue || !m.isMercenaryUnlocked() || m.maxCityGarrison <= 0) {
@@ -8077,6 +8168,15 @@
             GameLog.logSuccess("mercenary", `雇佣了 1 名雇佣兵。`, ['combat']);
         } else if (mercenariesHired > 1) {
             GameLog.logSuccess("mercenary", `雇佣了 ${mercenariesHired} 名雇佣兵。`, ['combat']);
+        }
+    }
+    function autoFire() {
+        if (haveTech("governor") && settings.govGovernor !== "none" && getGovernor() !== "none") {
+            let govOffice = (()=>{try{return document.getElementById("govOffice").__vue__}catch(e){return undefined}})();
+            if (game.global.race.governor?.g?.bg !== settings.govGovernor){
+                govOffice.fire();
+                return;
+            }
         }
     }
 
@@ -8584,6 +8684,9 @@
                 if (job.isSmartEnabled) {
                     if (job === jobs.Farmer || job === jobs.Hunter) {
                         if (jobMax[j] === undefined) {
+                            if (game.global.race['artifical'] || game.global.race['unfathomable']) {
+                                jobMax[j] = 0;
+                            } else {
                             let foodRateOfChange = resources.Food.rateOfChange;
                             let minFoodStorage = resources.Food.maxQuantity * 0.2;
                             let maxFoodStorage = resources.Food.maxQuantity * 0.6;
@@ -8599,9 +8702,8 @@
                                     foodRateOfChange += (resources.Food.currentQuantity - 10) * traitVal('carnivore', 0, '=') * (0.9 ** buildings.Smokehouse.count);
                                 }
                             }
-                            if (game.global.race['artifical']) {
-                                jobMax[j] = 0;
-                            } else  if (resources.Population.currentQuantity > state.lastPopulationCount) {
+
+                                if (resources.Population.currentQuantity > state.lastPopulationCount) {
                                 let populationChange = resources.Population.currentQuantity - state.lastPopulationCount;
                                 let farmerChange = job.count - state.lastFarmerCount;
 
@@ -8630,14 +8732,17 @@
                                 jobMax[j] = job.count;
                             }
                             minFarmers = jobMax[j];
-                            if (job === jobs.Hunter) {
+                            }
+                            if (game.global.race['unfathomable']) {
+                                jobMax[j] = Number.MAX_SAFE_INTEGER;
+                            } else if (job === jobs.Hunter) {
                                 if (resources.Furs.isUnlocked() && (game.global.race['evil'] || game.global.race['artifical'])) {
                                     jobMax[j] = resources.Furs.isUseful() ? Number.MAX_SAFE_INTEGER
-                                      : Math.max(resources.Furs.getBusyWorkers("job_hunter", jobs.Hunter.count));
+                                      : Math.max(jobMax[j], resources.Furs.getBusyWorkers("job_hunter", jobs.Hunter.count));
                                 }
                                 if (demonicLumber) {
                                     jobMax[j] = resources.Lumber.isUseful() ? Number.MAX_SAFE_INTEGER
-                                      : Math.max(resources.Lumber.getBusyWorkers("job_hunter", jobs.Hunter.count));
+                                      : Math.max(jobMax[j], resources.Lumber.getBusyWorkers("job_hunter", jobs.Hunter.count));
                                 }
                             }
                         }
@@ -8679,6 +8784,18 @@
                         if (jobMax[j] === undefined) {
                             jobMax[j] = resources.Crystal.isUseful() ? Number.MAX_SAFE_INTEGER
                               : resources.Crystal.getBusyWorkers("job_crystal_miner", jobs.CrystalMiner.count);
+                        }
+                        jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
+                    }
+                    if (job === jobs.Torturer) {
+                        if (jobMax[j] === undefined) {
+                            let total = 0;
+                            for (let i = 0; i < game.global.city.surfaceDwellers.length; i++) {
+                                total += game.global.city.captive_housing[`race${i}`];
+                                total += game.global.city.captive_housing[`jailrace${i}`];
+                            }
+                            let rank = game.global.stats.achieve.nightmare?.mg ?? 0;
+                            jobMax[j] = Math.ceil(total / (rank / 2));
                         }
                         jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
                     }
@@ -8737,6 +8854,7 @@
                             let taxBuffer = (settings.autoTax || haveTask("tax")) && game.global.civic.taxes.tax_rate < poly.taxCap(false) ? 1 : 0;
                             let entertainerMorale = (game.global.tech['theatre'] + traitVal('musical', 0))
                                 * traitVal('emotionless', 0, '-') * traitVal('high_pop', 1, '=')
+                                * (state.astroSign === 'sagittarius' ? 1.05 : 1)
                                 * (game.global.race['lone_survivor'] ? 25 : 1);
                             let moraleExtra = resources.Morale.rateOfChange - resources.Morale.maxQuantity - taxBuffer;
                             jobMax[j] = job.count - Math.floor(moraleExtra / entertainerMorale);
@@ -8751,15 +8869,21 @@
                     // Races with the Intelligent trait get bonus production based on the number of professors and scientists
                     // Only unassign them when knowledge is max if the race is not intelligent
                     // Once we've research shotgun sequencing we get boost and soon autoassemble genes so stop unassigning
-                    if (!game.global.race['intelligent'] && !haveTech("genetics", 5)) {
-                        // Don't assign professors if our knowledge is maxed and professors aren't contributing to our temple bonus
-                        if (job === jobs.Professor && resources.Knowledge.isCapped() && !haveTech("fanaticism", 2)) {
+                    if (job === jobs.Scientist) {
+                        if (jobMax[j] === undefined) {
+                            jobMax[j] = Number.MAX_SAFE_INTEGER;
+                            if (game.global.race.universe !== 'magic' && resources.Knowledge.isCapped() && !game.global.race['intelligent'] && !haveTech("science", 5) && !haveTech("genetics", 5)) {
                             jobsToAssign = 0;
+                            }
+                            if (game.global.race['witch_hunter']) {
+                                let SusPerWiz = game.global.civic.govern.type === 'magocracy' ? 0.5 : 1;
+                                jobMax[j] = ((99 - resources.Sus.currentQuantity) / SusPerWiz) + (job.count * SusPerWiz);
+                            }
                         }
-                        // Don't assign scientists if our knowledge is maxed and scientists aren't contributing to our knowledge cap
-                        if (job === jobs.Scientist && resources.Knowledge.isCapped() && !haveTech("science", 5)) {
+                        jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
+                    }
+                    if (job === jobs.Professor && !game.global.race['intelligent'] && resources.Knowledge.isCapped() && !haveTech("genetics", 5) && !haveTech("fanaticism", 2)) {
                             jobsToAssign = 0;
-                        }
                     }
                     if (job === jobs.CementWorker) {
                         if (jobMax[j] === undefined) {
@@ -8825,6 +8949,7 @@
         }
 
         let splitJobs = [];
+        if (game.global.race['unfathomable'] && farmerIndex !== -1 && settings.jobRaiderWeighting > 0) splitJobs.push({index: farmerIndex, job: jobs.Hunter, weighting: settings.jobRaiderWeighting} );
         if (lumberjackIndex !== -1 && settings.jobLumberWeighting > 0) splitJobs.push({index: lumberjackIndex, job: jobs.Lumberjack, weighting: settings.jobLumberWeighting} );
         if (quarryWorkerIndex !== -1 && settings.jobQuarryWeighting > 0) splitJobs.push({index: quarryWorkerIndex, job: jobs.QuarryWorker, weighting: settings.jobQuarryWeighting});
         if (crystalMinerIndex !== -1 && settings.jobCrystalWeighting > 0) splitJobs.push({index: crystalMinerIndex, job: jobs.CrystalMiner, weighting: settings.jobCrystalWeighting});
@@ -8841,9 +8966,9 @@
             });
 
             if (splitJobs.find(s => s.index === defaultIndex) && minDefault > requiredWorkers[defaultIndex]) {
-                let restoreDef = Math.min(minDefault, availableWorkers);
-                requiredWorkers[defaultIndex] = restoreDef;
-                availableWorkers += restoreDef;
+                let restoreDef = Math.min(availableWorkers, minDefault - requiredWorkers[defaultIndex]);
+                requiredWorkers[defaultIndex] += restoreDef;
+                availableWorkers -= restoreDef;
             }
             let currentFarmers = (requiredWorkers[farmerIndex] + requiredServants[farmerIndex] * servantMod);
             if (splitJobs.find(s => s.index === farmerIndex) && minFarmers > currentFarmers) {
@@ -8869,7 +8994,8 @@
                 while ((availableWorkers + availableServants) > 0 && remainingJobs.length > 0) {
                     let jobDetails = remainingJobs.sort(splitSorter)[0];
                     let total = requiredWorkers[jobDetails.index] + (requiredServants[jobDetails.index] * servantMod);
-                    if ((b === 2 || total < jobDetails.job.breakpointEmployees(b)) && !(total >= jobMax[jobDetails.index])) {
+                    let bp = jobDetails.job.getBreakpoint(b) > 0 ? jobDetails.job.breakpointEmployees(b) : 0;
+                    if ((b === 2 || total < bp) && !(total >= jobMax[jobDetails.index])) {
                         if (availableServants > 0) {
                             requiredServants[jobDetails.index]++;
                             availableServants--;
@@ -8901,6 +9027,18 @@
         workerDeltas.forEach((delta, index) => delta > 0 && jobList[index].addWorkers(delta));
 
         if (settings.jobManageServants) {
+            if (settings.scavengerServants) {
+                for (let i = 0; i < jobList.length; i++) {
+                    if (jobList[i].constructor.name == 'BasicJob') {
+                        if (jobList[i]._originalId == 'scavenger') {
+                            requiredServants[i] = (()=>{try{return game.global.race.servants.max}catch(e){return null}})();
+                        }
+                        else {
+                            requiredServants[i] = 0;
+                        }
+                    }
+                }
+            }
             let servantDeltas = requiredServants.map((req, index) => req - jobList[index].servants);
             servantDeltas.forEach((delta, index) => delta < 0 && jobList[index].removeServants(delta * -1));
             servantDeltas.forEach((delta, index) => delta > 0 && jobList[index].addServants(delta));
@@ -8911,7 +9049,7 @@
 
         // After reassignments adjust default job to something with workers, we need that for sacrifices.
         // Unless we're already assigning to default, and don't want it to be changed now
-        if (!craftOnly && settings.jobSetDefault && minDefault === 0) {
+        if (!craftOnly && settings.jobSetDefault) {
             /*if (jobs.Forager.isManaged() && requiredWorkers[jobList.indexOf(jobs.Forager)] > 0) {
                 jobs.Forager.setAsDefault();
             } else*/
@@ -8923,10 +9061,10 @@
                 jobs.CrystalMiner.setAsDefault();
             } else if (jobs.Scavenger.isManaged() && requiredWorkers[scavengerIndex] > 0) {
                 jobs.Scavenger.setAsDefault();
-            } else if (jobs.Farmer.isManaged()) {
-                jobs.Farmer.setAsDefault();
             } else if (jobs.Hunter.isManaged()) {
                 jobs.Hunter.setAsDefault();
+            } else if (jobs.Farmer.isManaged()) {
+                jobs.Farmer.setAsDefault();
             } else if (jobs.Unemployed.isManaged()) {
                 jobs.Unemployed.setAsDefault();
             }
@@ -9021,8 +9159,8 @@
                 currentTransmute += m.currentCount(res.id);
             }
             let manaAvailable = (currentTransmute + resources.Mana.rateOfChange) * settings.magicAlchemyManaUse;
-            let crystalAvailable = currentTransmute / 2 + resources.Crystal.currentQuantity + resources.Crystal.rateOfChange;
-            let maxTransmute = Math.floor(Math.min(manaAvailable, crystalAvailable * 2));
+            let crystalAvailable = currentTransmute * 0.15 + resources.Crystal.currentQuantity + resources.Crystal.rateOfChange;
+            let maxTransmute = Math.floor(Math.min(manaAvailable, crystalAvailable * (1/0.15)));
             activeList.forEach(res => adjustAlchemy[res.id] += Math.floor(maxTransmute * (m.resWeighting(res.id) / totalWeigthing)));
         }
 
@@ -9044,11 +9182,14 @@
         let pylonAdjustments = Object.fromEntries(spells.map(spell => [spell.id, 0]));
         let manaToUse = resources.Mana.rateOfChange * (resources.Mana.storageRatio > 0.99 ? 1 : settings.productionRitualManaUse);
         let usableMana = manaToUse;
+        let maxRituals = (settings.productionRitualSafe && game.global.race['witch_hunter'])
+            ? (jobs.Priest.count * (haveTech("roguemagic", 4) ? 4 : 1))
+            : Number.MAX_SAFE_INTEGER;
 
         let spellSorter = (a, b) => ((pylonAdjustments[a.id] / a.weighting) - (pylonAdjustments[b.id] / b.weighting)) || b.weighting - a.weighting;
         let remainingSpells = spells.filter(spell => spell.weighting > 0 && (spell !== m.Productions.Factory || jobs.CementWorker.count > 0)).sort(spellSorter);
         spellsLoop:
-        while(remainingSpells.length > 0) {
+        while(remainingSpells.length > 0 && maxRituals > 0) {
             let spell = remainingSpells.shift();
             let amount = pylonAdjustments[spell.id];
             let cost = m.costStep(amount);
@@ -9056,6 +9197,7 @@
             if (cost <= manaToUse) {
                 pylonAdjustments[spell.id] = amount + 1;
                 manaToUse -= cost;
+                maxRituals--;
                 // Insert spell back to array keeping it sorted
                 for (let i = remainingSpells.length - 1; i >= 0; i--) {
                     if (spellSorter(spell, remainingSpells[i]) > 0) {
@@ -9166,7 +9308,7 @@
 
                 for (let productionCost of fuel.cost) {
                     let resource = productionCost.resource;
-                    if (resource.storageRatio < 0.8 || resource === resources.StarPower){
+                    if (resource.storageRatio < 0.8) {
                         let remainingRateOfChange = resource.rateOfChange + (m.fueledCount(fuel) * productionCost.quantity);
                         // No need to preserve minimum income when storage is full
                         if (resource.storageRatio < 0.98) {
@@ -9174,7 +9316,7 @@
                         }
 
                         let affordableAmount = Math.max(0, Math.floor(remainingRateOfChange / productionCost.quantity));
-                        if (affordableAmount < maxAllowedUnits && resource !== resources.StarPower) {
+                        if (affordableAmount < maxAllowedUnits) {
                             state.tooltips["smelterFuels" + fuel.id.toLowerCase()] = `${resource.name}产量不足<br>`;
                         }
                         maxAllowedUnits = Math.min(maxAllowedUnits, affordableAmount);
@@ -9199,7 +9341,7 @@
             }
             totalSmelters -= remainingSmelters;
         }
-
+        totalSmelters += m.extraOperating();
         let smelterIronCount = m.smeltingCount(m.Productions.Iron);
         let smelterSteelCount = m.smeltingCount(m.Productions.Steel);
         let smelterIridiumCount = m.smeltingCount(m.Productions.Iridium);
@@ -9662,8 +9804,26 @@
         // Set the replicator to whatever has 1. the highest priority and 2. the highest weighting. Should be improved in the future
         if (priorityList.length > 0 && priorityList[0].length > 0) {
             var selectedResource = priorityList[0].sort((a, b) => a.weighting - b.weighting)[0];
-            ReplicatorManager.setResource(selectedResource.id);
+            //ReplicatorManager.setResource(selectedResource.id);
+            var tarRes = selectedResource.id;
         }
+        let buildingList = [...BuildingManager.managedPriorityList(), ...ProjectManager.managedPriorityList()].sort((a, b) => b.weighting - a.weighting);
+        if (settings.replicatorAccordingBuildingWeight && state.triggerTargets.length == 0 && buildingList.length > 0){
+            for (let i = Math.min(2, buildingList.length - 1); i >= 0; i--) {
+                let tarBuilding = buildingList[i];
+                let thisTime = 0, tarTime = 0;
+                for (let tarBuildRes in tarBuilding.cost) {
+                    if (replicableResources.includes(tarBuildRes) && game.global.resource[tarBuildRes].amount < tarBuilding.cost[tarBuildRes]) {
+                        thisTime = (tarBuilding.cost[tarBuildRes] - game.global.resource[tarBuildRes].amount) / game.global.resource[tarBuildRes].diff;
+                        if (thisTime > tarTime && ReplicatorManager._industryVue.avail(tarBuildRes) == true) {
+                            tarTime = thisTime;
+                            tarRes = tarBuildRes;
+                        }
+                    }
+                }
+            }
+        }
+        ReplicatorManager.setResource(tarRes);
 
 
         // Enable matter replicator task
@@ -9689,6 +9849,21 @@
             }
 
             getVueById("govOffice").setTask('replicate', replicatorTaskIndex);
+        }
+        let inputEvent = new Event('input');
+        if (game.global.race.governor.config.replicate.pow.cap != 2000000) {
+            let repConfigPowCap = document.querySelectorAll(".tConfig")[8].querySelectorAll(".storage")[0].querySelectorAll(".b-numberinput input")[0];
+            repConfigPowCap.value = 2000000; //设置“至多使用电力”
+            repConfigPowCap.dispatchEvent(inputEvent);
+        }
+        let repConfigPowBuffer = document.querySelectorAll(".tConfig")[8].querySelectorAll(".storage")[0].querySelectorAll(".b-numberinput input")[1];
+        let powerBuffer = 5;
+        for (let unlockedBuilding of buildingList) {
+            if (unlockedBuilding.powered > powerBuffer) {
+                powerBuffer = unlockedBuilding.powered;
+            }
+            repConfigPowBuffer.value = Math.ceil(powerBuffer * 3); //设置“可用电力缓冲值”，为可建造建筑最大耗电量的3倍（倍率可自行修改）
+            repConfigPowBuffer.dispatchEvent(inputEvent);
 
         }
 
@@ -9774,6 +9949,17 @@
                 }
                 return;
             case 'ascension':
+                if (game.global.race['witch_hunter']) {
+                    if (isWitchAscensionPrestigeAvailable()) {
+                        if (state.goal !== 'Reset') {
+                            state.goal = 'Reset';
+                            return;
+                        }
+                        KeyManager.set(false, false, false);
+                        buildings.PitAbsorptionChamber.vue.action(); // Hack to bypass "count < max" check
+                        state.goal = "GameOverMan";
+                    }
+                } else {
                 if (isAscensionPrestigeAvailable()) {
                     if (state.goal !== 'Reset') {
                         state.goal = 'Reset';
@@ -9782,14 +9968,27 @@
                     KeyManager.set(false, false, false);
                     buildings.SiriusAscend.click();
                 }
+                }
                 return;
             case 'demonic':
+                if (game.global.race['witch_hunter']) {
+                    if (isWitchAscensionPrestigeAvailable(true)) {
+                        if (state.goal !== 'Reset') {
+                            state.goal = 'Reset';
+                            return;
+                        }
+                        KeyManager.set(false, false, false);
+                        buildings.PitAbsorptionChamber.vue.action(); // Hack to bypass "count < max" check
+                        state.goal = "GameOverMan";
+                    }
+                } else {
                 if (isDemonicPrestigeAvailable()) {
                     if (state.goal !== 'Reset') {
                         state.goal = 'Reset';
                         return;
                     }
                     techIds["tech-demonic_infusion"].click();
+                    }
                 }
                 return;
             case 'terraform':
@@ -9820,7 +10019,7 @@
         }
     }
     function isPrestigeAllowed(type) {
-        return settings.autoPrestige && !(settings.prestigeWaitAT && game.global.settings.at > 0 && (!type || settings.prestigeType === type));
+        return settings.autoPrestige && !(settings.prestigeWaitAT && game.global.settings.at > 0) && (!type || settings.prestigeType === type);
     }
 
     function isCataclysmPrestigeAvailable() {
@@ -9841,6 +10040,9 @@
 
     function isAscensionPrestigeAvailable() {
         return buildings.SiriusAscend.isUnlocked() && isPillarFinished();
+    }
+    function isWitchAscensionPrestigeAvailable(demonic) {
+        return (!demonic || haveTech("forbidden", 5)) && buildings.PitAbsorptionChamber.count >= 100 && buildings.PitSoulCapacitor.instance.energy >= 100000000 && isPillarFinished();
     }
 
     function isDemonicPrestigeAvailable() {
@@ -9868,29 +10070,122 @@
         getVueById('sshifter')?.setShape(settings.shifterGenus);
     }
 
-    function autoAssembleGene() {
-        // If we haven't got the assemble gene button or don't have full knowledge then return
-        if (!haveTech("genetics", 6) || resources.Knowledge.currentQuantity < 200000 || resources.Knowledge.isDemanded()) {
+    var psychicPowerCost = {
+        murder: [10, 8],
+        boost: [75, 60],
+        assault: [45, 36],
+        profit: [65, 52],
+        mind_break: [80, 64],
+        stun: [100, 80]
+    };
+    function autoPsychic() {
+        if (settings.psychicPower === "none" || !game.global.race['psychic'] || !game.global.tech['psychic'] || resources.Energy.storageRatio < 1) {
+            return false;
+        }
+        let vue = null;
+        const canAfford = (p) => resources.Energy.currentQuantity >= psychicPowerCost[p][game.global.tech.psychic >= 5 ? 1 : 0];
+        if (settings.psychicPower === "murder" || (settings.psychicPower !== "boost" && game.global.stats.psykill < 10)) {
+            if (resources.Population.currentQuantity > 0 && canAfford("murder") && (vue = getVueById('psychicKill'))) {
+                vue.murder();
+                return; // Always perform 10 murders asap to unlock advanced powers
+            }
+        }
+        if (game.global.tech['psychicthrall'] && game.global.tech['unfathomable'] && game.global.race['unfathomable']) {
+            let jailed = resources.Thrall.rateOfChange;
+            let cells = resources.Thrall.storageRatio;
+            if (settings.psychicPower === "auto" || settings.psychicPower === "mind_break") {
+                if ((jailed > 1 || (jailed === 1 && cells === 1)) && canAfford("mind_break") && (vue = getVueById('psychicMindBreak'))) {
+                    vue.breakMind();
+                    return; // If we have more than one jailed it means that tormenter can't keep up with capture speed for some reason, and need some assistment
+                }
+            }
+            if (settings.psychicPower === "auto" || settings.psychicPower === "stun") {
+                if ((game.global.tech.psychicthrall >= 2 && cells < 1) && canAfford("stun") && (vue = getVueById('psychicCapture'))) {
+                    vue.stun();
+                    return; // That's what we really want, new thrall
+                }
+            }
+        }
+        const haveRoom = r => r.currentQuantity + (r.income * 1.5 * 300) < r.maxQuantity;
+        let powers = game.global.race.psychicPowers;
+        if (settings.psychicPower === "auto" || settings.psychicPower === "profit") {
+            if (game.global.tech.psychic >= 3 && haveRoom(resources.Money) && !powers.cash && canAfford("profit") && (vue = getVueById('psychicFinance'))) {
+                vue.boostVal();
+                return; // More money is always welcomed
+            }
+        }
+        if (settings.psychicPower === "auto" || settings.psychicPower === "boost") {
+            if (!powers.boostTime && canAfford("boost")) {
+                let boosted = null;
+                if (settings.psychicBoostRes === "auto") {
+                    let boostable = Object.values(resources).filter(r => r.isUnlocked() && r.atomicMass > 0 && haveRoom(r))
+                        .sort((a, b) => b.income - a.income);
+                    if (boostable.length > 0) {
+                        boosted = boostable[0].id;
+                    }
+                } else {
+                    boosted = settings.psychicBoostRes;
+                }
+                if (boosted && (vue = getVueById('psychicBoost'))) {
+                    $(`#psychicBoost #psyhscrolltarget input[value="${boosted}"]`).click();
+                    vue.boostVal();
+                    return; // Try to find something that have some good income, and still have a room for more resources
+                }
+            }
+        }
+        if (settings.psychicPower === "auto" || settings.psychicPower === "assault") {
+            if (game.global.tech.psychic >= 2 && !powers.assaultTime && canAfford("assault") && (vue = getVueById('psychicAssault'))) {
+                vue.boostVal();
+                return; // Very last option, attack boost
+            }
+        }
+    }
+    function autoGenetics() {
+        let genetics = game.global.tech.genetics;
+        if (!genetics) {
+            return; // Genetics not researched yet
+        }
+        let geneticsVue = getVueById("arpaSequence");
+        let seq = game.global.arpa.sequence;
+        if (!geneticsVue || !seq) {
+            return; // Just in case
+        }
+        if ((settings.geneticsSequence === "enabled" && !seq.on) ||
+            (settings.geneticsSequence === "disabled" && seq.on) ||
+            (settings.geneticsSequence === "decode" && seq.on && genetics > 1)) {
+            geneticsVue.toggle();
+        }
+        if (genetics < 5) {
+            return; // Boost not researched yet
+        }
+        if ((settings.geneticsBoost === "enabled" && !seq.boost) ||
+            (settings.geneticsBoost === "disabled" && seq.boost)) {
+            geneticsVue.booster();
+        }
+        if (genetics < 6) {
+            return; // Assembling not researched yet
+        }
+        if ((settings.geneticsAssemble === "enabled" && !seq.auto) ||
+            (settings.geneticsAssemble === "disabled" && seq.auto)) {
+            geneticsVue.auto_seq();
+        }
+        if (settings.geneticsAssemble !== "auto" || resources.Knowledge.currentQuantity < 200000 || resources.Knowledge.isDemanded()) {
             return;
         }
 
         let nextTickKnowledge = resources.Knowledge.currentQuantity + resources.Knowledge.rateOfChange / ticksPerSecond();
         let overflowKnowledge = nextTickKnowledge - resources.Knowledge.maxQuantity;
-        if (overflowKnowledge < 0) {
+        if (overflowKnowledge <= 0) {
             return;
         }
 
-        let vue = getVueById("arpaSequence");
-        if (vue === undefined) { return false; }
 
         let genesToAssemble = Math.ceil(overflowKnowledge / 200000);
-        if (genesToAssemble > 0) {
             resources.Knowledge.currentQuantity -= 200000 * genesToAssemble;
             resources.Genes.currentQuantity += 1 * genesToAssemble;
 
             for (let m of KeyManager.click(genesToAssemble)) {
-                vue.novo();
-            }
+            geneticsVue.novo();
         }
     }
 
@@ -9926,7 +10221,7 @@
                 if (resource.storageRatio > resource.autoSellRatio) {
                     maxAllowedUnits = Math.min(maxAllowedUnits, Math.floor(resource.currentQuantity - (resource.autoSellRatio * resource.maxQuantity))); // If not full sell up to our sell ratio
                 } else {
-                    maxAllowedUnits = Math.min(maxAllowedUnits, Math.floor(resource.calculateRateOfChange({buy: false, all: true}) * 2 / ticksPerSecond())); // If resource is full then sell up to 2 ticks worth of production
+                    maxAllowedUnits = Math.min(maxAllowedUnits, Math.floor(resource.income * 2 / ticksPerSecond())); // If resource is full then sell up to 2 ticks worth of production
                 }
 
                 if (maxAllowedUnits <= maxMultiplier) {
@@ -10277,6 +10572,9 @@
         if (itemId === "tech-isolation_protocol" && settings.prestigeType !== "retire") {
             return "是通往隐退重置的分支";
         }
+        if (itemId === "tech-outerplane_summon" && settings.prestigeType !== "demonic") {
+            return "是通往巫术灌注的分支";
+        }
 
         if (itemId === "tech-focus_cure" && settings.prestigeType !== "matrix") {
             return "是通往矩阵重置的分支";
@@ -10326,7 +10624,7 @@
         }
 
         if (itemId !== settings.userResearchTheology_2 && (itemId === "tech-deify" || itemId === "tech-study")) {
-            let longRun = ["ascension", "demonic", "apocalypse", "terraform", "matrix", "retire", "eden"].includes(settings.prestigeType);
+            let longRun = ["ascension", "witch_ascension", "demonic", "apocalypse", "terraform", "matrix", "retire", "eden"].includes(settings.prestigeType);
             if (itemId === "tech-deify" && !(settings.userResearchTheology_2 === "auto" && longRun)) {
                 return "不是想要的神学研究分支";
             }
@@ -10359,6 +10657,12 @@
 
     function getCitadelConsumption(amount) {
         return (30 + (amount - 1) * 2.5) * amount * (game.global.race['emfield'] ? 1.5 : 1);
+    }
+    function resetAutoFire(reset) {
+        let def = {
+            autoFire: false,
+        }
+        applySettings(def, reset);
     }
 
     function isHellSupressUseful() {
@@ -11519,7 +11823,13 @@
             }
         } else if (buildings.Alien2Mission.isUnlocked() && resources.Knowledge.maxQuantity >= settings.fleetAlien2Knowledge) {
             let totalPower = allFleets.reduce((sum, ship) => sum + (ship.power * ship.count), 0);
-            if (totalPower >= 650) {
+            let doAlien2Assault = false;
+            if (settings.fleetAlien2Loses === "suicide") {
+                doAlien2Assault = totalPower >= 400;
+            } else {
+                doAlien2Assault = totalPower >= 650;
+            }
+            if (doAlien2Assault) {
                 assault = {ships: allFleets.map(ship => ship.count), region: "gxy_alien2", mission: buildings.Alien2Mission};
             }
         }
@@ -12111,6 +12421,10 @@
     }
 
     function checkEvolutionResult() {
+        if (!settings.masterScriptToggle || !state.evoCheckNeeded) {
+            return true;
+        }
+        state.evoCheckNeeded = false;
         let needReset = false;
         if (settings.autoEvolution && settings.evolutionBackup){
 
@@ -12192,7 +12506,11 @@
           + (buildings.TauStarRingworld.count >= 1000 ? 1 : 0) // Ringworld built
           + (game.global.tech.tau_gas2 >= 5 ? 1 : 0) // Alien Space Station built
           + (game.global.tech.replicator ? 1 : 0) // Matter Replicator unlocked
-          + (game.global.tauceti.tau_factory?.count > 0 ? 1 : 0); // Factory built in lone survivor
+          + (game.global.tauceti.tau_factory?.count > 0 ? 1 : 0) // Factory built in lone survivor
+          + (game.global.space.g_factory?.count > 0 ? 1 : 0), // Graphene plant built in lone survivor
+          + (game.global.tauceti.mining_ship?.count > 0 ? 1 : 0), // Extractor ship built
+          + (game.global.tech.psychicthrall ?? 0), // Psychic powers
+          + (game.global.tech.psychic ?? 0) // Psychic powers
 
         if (game.global.settings.showShipYard) { // TP Ship Yard
           state.tabHash += 1
@@ -12227,22 +12545,161 @@
             return false;
         }
     }
+    function getMultiSegmentedTimeLeft(target) {
+        let remainingSegments = target.gameMax - target.count;
 
+        if (target instanceof Project) {
+            remainingSegments = (100 - target.progress) / target.currentStep;
+        }
+        let longestResource = '',
+            longestTimeLeft = 0;
+        Object.keys(target.cost).forEach(resource => {
+            const resourceCostTotal = (target.cost[resource] * remainingSegments);
+            const resourceTimeLeftRaw = (resourceCostTotal - game.global.resource[resource].amount) / game.global.resource[resource].diff;
+            if (resourceTimeLeftRaw > longestTimeLeft && resourceCostTotal > game.global.resource[resource].amount) {
+                longestResource = resource;
+                longestTimeLeft = resourceTimeLeftRaw;
+            }
+        });
+        const timeLeft = longestTimeLeft === Infinity ? 'Never' : poly.timeFormat(longestTimeLeft);
+        return {
+            resource: longestResource,
+            timeLeft
+        };
+    }
+    function updateActiveTargetsUI(queuedTargets, type) {
+        if (queuedTargets.length) {
+            $(`#active_targets .target-type-box.${type}`).show();
+        } else {
+            $(`#active_targets .target-type-box.${type}`).hide();
+            return;
+        }
+        $(`#active_targets ul.active_targets-list.${type}`).html(queuedTargets.map(target => {
+            let targetName = target.name,
+                targetTimeLeft = '',
+                targetSegments = '',
+                researchTimeLeft = 0;
+            if (target.count && !(target.is && target.is.multiSegmented)) {
+                targetName += ` #${target.count + 1}`;
+            }
+            if (target.instance && target.instance.time) {
+                targetTimeLeft = `${target.instance.time}`;
+            }
+            const costs = target.cost;
+            if (target instanceof Technology) {
+                if ($.isEmptyObject(target.cost)) {
+                    targetTimeLeft = '等待前置条件';
+                } else if (target.cost.Knowledge > game.global.resource.Knowledge.max) {
+                    targetTimeLeft = '知识不足';
+                }
+            } else if (type === 'arpa' || target instanceof Project) {
+                targetName += ` (${target.progress}%)`;
+                const segmentedTimeLeft = getMultiSegmentedTimeLeft(target);
+                targetTimeLeft = `${segmentedTimeLeft.timeLeft}</span> <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
+            }
+            const costsHTML = Object.keys(costs).map(resource => {
+                let res = resources[resource],
+                    className = 'has-text-success',
+                    resourceTimeLeft = '';
+                if (res.currentQuantity < costs[resource]) {
+                    className = 'has-text-danger';
+                    if (res.maxQuantity >= costs[resource] && res.income > 0) {
+                        const timeLeftRaw = (costs[resource] - res.currentQuantity) / res.income;
+                        if (target instanceof Technology && timeLeftRaw > researchTimeLeft) {
+                            researchTimeLeft = timeLeftRaw;
+                        }
+                        resourceTimeLeft = `${poly.timeFormat(timeLeftRaw)}`;
+                        if (res === resources.Soul_Gem) {
+                            resourceTimeLeft = `~${resourceTimeLeft}`;
+                        }
+                    } else {
+                        targetTimeLeft = resourceTimeLeft = '永不';
+                    }
+                }
+                const progressBarWidth = (res.currentQuantity / costs[resource]) * 100;
+                const isReplicatingClassName = (game.global.race.replicator && game.global.race.replicator.res === resource) ? 'is-replicating' : '';
+                return `
+                    <li>
+                        <div class='active_targets-resource-row'>
+                            <div class='active_targets-resource-text'>
+                                <span class='${className}'>${res.title}</span>
+                            </div>
+                            <div class="percentage-full-progress-bar-wrapper ${isReplicatingClassName}">
+                                <div class="percentage-full-progress-bar" style="width: ${progressBarWidth}%;"></div>
+                            </div>
+                            <div class="active_targets-time-left">${resourceTimeLeft}</div>
+                        </div>
+                    </li>`;
+            }).join('');
+            if (target.is && target.is.multiSegmented) {
+                targetSegments = `(${target.count} / ${target.gameMax})`;
+                const segmentedTimeLeft = getMultiSegmentedTimeLeft(target);
+                targetTimeLeft = `${segmentedTimeLeft.timeLeft} <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
+            }
+            if (target instanceof Technology && targetTimeLeft === '') {
+                targetTimeLeft = poly.timeFormat(researchTimeLeft);
+            }
+            const targetNameDisplay = `<span class="active-target-title name">${targetName} </span><span class="active-target-title time">${targetTimeLeft} <span class="active-target-segments has-text-special">${targetSegments}</span></span>`;
+            let queueid = '';
+            if (type === 'buildings') {
+                queueid = `${target._tab}-${target.id}`;
+            } else if (type === 'arpa') {
+                queueid = `${target._tab}${target.id}`;
+            } else if (type === 'research' || type === 'triggers') {
+                queueid = target.id;
+            }
+            return `
+                    <li class="active-target-li">
+                        ${targetNameDisplay} <span class="active-target-remove-x ${type}" data-queueid="${queueid}" data-type="${type}">＋</span>
+                        <ul class="active_targets-sub-list">
+                            ${costsHTML}
+                        </ul>
+                    </li>
+                `;
+        }));
+    }
     function updateState() {
         if (game.global.race.species === "protoplasm") {
             state.goal = "Evolution";
         } else if (state.goal === "Evolution") {
             // Check what we got after evolution
-            if (settings.masterScriptToggle && !checkEvolutionResult()) {
+            if (!checkEvolutionResult()) {
                 return;
             }
             state.goal = "Standard";
             if (settingsRaw.triggers.length > 0) { // We've moved from evolution to standard play. There are technology descriptions that we couldn't update until now.
                 updateTriggerSettingsContent();
             }
+        } else if (game.global.stats.days === 1 && (game.global.race.slow || game.global.race.hyper || game.global.race.species === "junker")) {
+            if (!checkEvolutionResult()) {
+                return;
+            }
         }
 
         // Reset required storage and prioritized resources
+        if (state.goal === "Standard" && evolve.global.stats.days <= 10)
+        {
+            try {
+                if (evolve.global.space.position.spc_eris > 270
+                    || evolve.global.space.position.spc_eris < 90) {
+                        GameLog.logDanger("special", `糟糕，阋神星太远了，位置：`+evolve.global.space.position.spc_eris, ['progress']);
+                        let resetButton = document.querySelector(".reset .button:not(.right)");
+                        if (resetButton.innerText === game.loc("reset_soft")) {
+                            if (settings.evolutionQueueEnabled && settingsRaw.evolutionQueue.length > 0) {
+                                if (!settings.evolutionQueueRepeat) {
+                                    addEvolutionSetting();
+                                }
+                                settingsRaw.evolutionQueue.unshift(settingsRaw.evolutionQueue.pop());
+                            }
+                            updateSettingsFromState();
+                            state.goal = "GameOverMan";
+                            resetButton.disabled = false;
+                            resetButton.click();
+                        }
+                }
+            } catch (error) {
+            }
+        }
         for (let id in resources) {
             resources[id].storageRequired = 1;
             resources[id].requestedQuantity = 0;
@@ -12271,12 +12728,49 @@
             }
         }
 
+        state.astroSign = poly.astrologySign();
         buildings.GateEastTower.gameMax = towerSize;
         buildings.GateWestTower.gameMax = towerSize;
 
         // Space dock is special and has a modal window with more buildings!
         if (!buildings.GasSpaceDock.isOptionsCached()) {
             buildings.GasSpaceDock.cacheOptions();
+        }
+        if (settings.activeTargetsUI) {
+            const queuedTargets = state.queuedTargetsAll;
+            const triggersList = state.triggerTargets,
+                buildingsList = [],
+                researchList = [],
+                arpaList = [];
+            queuedTargets.forEach(target => {
+                if (target instanceof Technology) {
+                    researchList.push(target);
+                } else if (target instanceof Project) {
+                    arpaList.push(target);
+                } else {
+                    buildingsList.push(target);
+                }
+            });
+            updateActiveTargetsUI(triggersList, 'triggers');
+            updateActiveTargetsUI(buildingsList, 'buildings');
+            updateActiveTargetsUI(researchList, 'research');
+            updateActiveTargetsUI(arpaList, 'arpa');
+            $(".active-target-remove-x").click(function() {
+                const queueId = $(this).data('queueid'),
+                    type = $(this).data('type');
+                const $queuedItem = $(".queued").filter((id, el) => {return el.id.indexOf(queueId) > -1});
+                if (type === 'triggers') {
+                    const clickedTrigger = TriggerManager.targetTriggers.find(trigger => trigger.actionId.includes(queueId));
+                    if (clickedTrigger !== undefined && clickedTrigger !== null) {
+                        clickedTrigger.complete = true;
+                    }
+                } else if ($queuedItem?.length) {
+                    $queuedItem[0].click();
+                }
+                $("#active_targets-wrapper").css('height', 'auto');
+            });
+        } else {
+            $(".active-target-remove-x").off('click');
         }
     }
 
@@ -12466,8 +12960,12 @@
             let crew = total / 5;
             notes.push(`下次建造将使${buildings.AlphaExchange.title}的储量上限 +${getNiceNumber(total)}% (每名船员 +${getNiceNumber(crew)}%)`);
         }
+        if (obj === buildings.Hospital
+            || (obj === buildings.BootCamp && game.global.race['artifical'])
+            || (obj === buildings.EnceladusBase && game.global.race['orbit_decayed'])) {
+            notes.push(`每天约治愈 ${getNiceNumber(getHealingRate())} 名伤兵`);
+        }
         if (obj === buildings.Hospital) {
-            notes.push(`约需要 ${getNiceNumber(getHealingRate())} 秒才能治愈一名伤兵`);
             let growth = 1 / (getGrowthRate() * 4); // Fast loop, 4 times per second
             notes.push(`约需要 ${getNiceNumber(growth)} 秒才能新增一位市民`);
         }
@@ -12619,15 +13117,16 @@
                     if (!checkCompare[check.cmp](var1, var2)) {
                         continue;
                     }
+                    let ret = checkCustom[check.cmp] ? var2 : conditions[i].ret;
 
-                    if (typeof settingsRaw[key] === typeof check.ret) {
+                    if (typeof settingsRaw[key] === typeof ret) {
                         // Override single value
-                        overrides[key] = check.ret;
+                        overrides[key] = ret;
                         break;
                     } else if (typeof settingsRaw[key] === "object") {
                         // Xor lists
                         xorLists[key] = xorLists[key] ?? [];
-                        xorLists[key].push(check.ret);
+                        xorLists[key].push(ret);
                     } else {
                         throw `Expected type: ${typeof settingsRaw[key]}; Override type: ${typeof check.ret}`;
                     }
@@ -12780,13 +13279,13 @@
                 autoBuild(); // Called after autoStorage to compensate fluctuations of quantum(caused by previous tick's adjustments) levels before weightings
             }
         }
-        if (settings.autoFire) {
-            autoFire();
-        }
         if (settings.autoJobs) {
             autoJobs();
         } else if (settings.autoCraftsmen) {
             autoJobs(true);
+        }
+        if (settings.autoFire) {
+            autoFire();
         }
         if (settings.autoFleet) {
             if (game.global.race['truepath']) {
@@ -12798,8 +13297,8 @@
         if (settings.autoMech) {
             autoMech(); // Called after autoBuild, to prevent stealing supplies from mechs
         }
-        if (settings.autoAssembleGene) {
-            autoAssembleGene(); // Called after autoBuild and autoResearch to prevent stealing knowledge from them
+        if (settings.autoGenetics) {
+            autoGenetics(); // Called after autoBuild and autoResearch to prevent stealing knowledge from them
         }
         if (settings.autoMinorTrait) {
             autoMinorTrait(); // Called after auto assemble to utilize new genes right asap
@@ -12835,6 +13334,7 @@
         }
         if (settings.autoMinorTrait) {
             autoShapeshift(); // Shifting genus can remove techs, buildings, resources, etc. Leaving broken preloaded buttons behind. This thing need to be at the very end, to prevent clicking anything before redrawing tabs
+            autoPsychic();
         }
         if (settings.autoMutateTraits) {
             autoMutateTrait();
@@ -12922,6 +13422,18 @@
                 "Dwarf World Collider (Complete)":"世界对撞机（已完成）",
                 "Tau Red Overseer":"天仓五" + evolve.actions.tauceti.tau_red.info.name() + "监工",
                 "Tau Red Womling Theater":"天仓五" + evolve.actions.tauceti.tau_red.info.name() + "众鼬剧院",
+                "Blackhole Stargate (Complete)":"星际之门（已完成）",
+                "Tau Housing":"棚屋（天仓五）",
+                "Tau Red Womling Lab":"深空实验室（天仓五）",
+                "Tau Colony":"定居点（天仓五）",
+                "Captive Housing":"兽栏",
+                "Conceal Ward":"隐秘结界",
+                "Red Captive Housing (Cataclysm)":"兽栏 (大灾变)",
+                "Tau Captive Housing":"兽栏 (天仓五)",
+                "Pit Soul Capacitor (Witch Hunting)":"灵魂容器 (猎巫)",
+                "Pit Absorption Chamber (Witch Hunting)":"灵魂之间 (猎巫)",
+                "Hell Space Casino":"赌场 (水星)",
+                "Sun Jump Gate":"空间跳跃门（太阳系）",
                 '':'',
                 '':'',
                 '':'',
@@ -13050,15 +13562,15 @@
     function addScriptStyle() {
         // background = @html-background, alt = @market-item-background, hover = (alt - 0x111111), border = @primary-border, primary = @primary-color
         let cssData = {
-            dark: {background: "#282f2f", alt: "#0f1414", hover: "#010303", border: "#ccc", primary: "#fff"},
-            light: {background: "#fff", alt: "#ddd", hover: "#ccc", border: "#000", primary: "#000"},
-            night: {background: "#282f2f", alt: "#1b1b1b", hover: "#0a0a0a", border: "#ccc", primary: "#fff"},
-            darkNight: {background: "#282f2f", alt: "#1b1b1b", hover: "#0a0a0a", border: "#ccc", primary: "#b8b8b8"},
-            redgreen: {background: "#282f2f", alt: "#1b1b1b", hover: "#0a0a0a", border: "#ccc", primary: "#fff"},
-            gruvboxLight: {background: "#fbf1c7", alt: "#f9f5d7", hover: "#e8e4c6", border: "#3c3836", primary: "#3c3836"},
-            gruvboxDark: {background: "#282828", alt: "#1d2021", hover: "#0c0f10", border: "#3c3836", primary: "#ebdbb2"},
-            orangeSoda: {background: "#131516", alt: "#292929", hover: "#181818", border: "#313638", primary: "#EBDBB2"},
-            dracula: {background: "#282a36", alt: "#1d2021", hover: "#C0F10", border: "#44475a", primary: "#f8f8f2"},
+            dark: {background: "#282f2f", alt: "#0f1414", hover: "#010303", border: "#ccc", primary: "#fff", hasTextWarning: '#ffdd57'},
+            light: {background: "#fff", alt: "#dddddd", hover: "#ccc", border: "#000", primary: "#000", hasTextWarning: '#7a6304'},
+            night: {background: "#282f2f", alt: "#1b1b1b", hover: "#0a0a0a", border: "#ccc", primary: "#fff", hasTextWarning: '#ffdd57'},
+            darkNight: {background: "#282f2f", alt: "#1b1b1b", hover: "#0a0a0a", border: "#ccc", primary: "#b8b8b8", hasTextWarning: '#ffcc00'},
+            redgreen: {background: "#282f2f", alt: "#1b1b1b", hover: "#0a0a0a", border: "#ccc", primary: "#fff", hasTextWarning: '#ffdd57'},
+            gruvboxLight: {background: "#fbf1c7", alt: "#f9f5d7", hover: "#e8e4c6", border: "#3c3836", primary: "#3c3836", hasTextWarning: '#b57614'},
+            gruvboxDark: {background: "#282828", alt: "#1d2021", hover: "#0c0f10", border: "#3c3836", primary: "#ebdbb2", hasTextWarning: '#fabd2f'},
+            orangeSoda: {background: "#131516", alt: "#292929", hover: "#181818", border: "#313638", primary: "#EBDBB2", hasTextWarning: '#F06543'},
+            dracula: {background: "#282a36", alt: "#1d2021", hover: "#C0F10", border: "#44475a", primary: "#f8f8f2", hasTextWarning: '#f1fa8c'},
         };
         let styles = "";
         // Colors for different themes
@@ -13093,6 +13605,18 @@
                 html.${theme} .script-contentactive,
                 html.${theme} .script-collapsible:hover {
                     background-color: ${color.hover};
+                }
+                html.${theme} .percentage-full-progress-bar-wrapper {
+                    background-color: ${color.hasTextWarning}15;
+                }
+                html.${theme} .percentage-full-progress-bar {
+                    background-color: ${color.hasTextWarning}75;
+                }
+                html.${theme} .percentage-full-progress-bar-wrapper.is-replicating {
+                    background-image: linear-gradient(135deg,${color.hasTextWarning}30 25%,transparent 25%,transparent 50%,${color.hasTextWarning}30 50%,${color.hasTextWarning}30 75%,transparent 75%,transparent);
+                }
+                html.${theme} #active_targets .target-type-box {
+                    background-color: ${color.alt}75;
                 }`;
         };
         styles += `
@@ -13251,6 +13775,101 @@
             .area { width: calc(100% / 6) !important; max-width: 8rem; }
             .offer-item { width: 15% !important; max-width: 7.5rem; }
             .tradeTotal { margin-left: 11.5rem !important; }
+            #active_targets-wrapper {
+                padding: 1rem;
+                max-height: 50vh;
+            }
+            #sideQueue #active_targets-wrapper {
+                max-height: 50vh;
+            }
+            #active_targets {
+                font-size: 0.9em;
+                max-width: 500px;
+            }
+            #active_targets .target-type-box {
+                background-color: #1d2021;
+                margin: 10px 0;
+                padding: 0.5rem 1rem;
+            }
+            #active_targets ul {
+                list-style-type: none;
+                padding-top: 5px;
+            }
+            .active_targets-list > li {
+                margin-top: 10px;
+                width: 100%;
+            }
+            .active-target-title {
+                display: inline-block;
+            }
+            .active-target-title.name {
+                width: 40%;
+            }
+            .active-target-title.time {
+                width: 40%;
+            }
+            .active-target-segments {
+                white-space: nowrap;
+            }
+            #active_targets .active_targets-sub-list {
+                list-style-type: none;
+            }
+            #active_targets .active_targets-sub-list li {
+                width: 100%;
+                padding: 0;
+            }
+            #active_targets > ul > li:not(:first-child) {
+              margin-top: 10px;
+            }
+            #active_targets .active_targets-resource-text {
+                display: flex;
+                width: 40%;
+            }
+            #active_targets .active_targets-resource-text span {
+                margin-left: 10px;
+            }
+            #active_targets .active_targets-resource-row {
+                display: flex;
+            }
+            #active_targets .active_targets-resource-row .percentage-full-progress-bar-wrapper {
+                display: flex;
+                margin: 5px 0 0 0;
+                width: 35%;
+                height: 9px;
+                overflow: hidden;
+            }
+            .percentage-full-progress-bar-wrapper.is-replicating {
+                background-image: linear-gradient(135deg,rgba(255,255,255,.95) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.95) 50%,rgba(255,255,255,.95) 75%,transparent 75%,transparent);
+                background-size: 20px 20px;
+                animation: progress-bar-stripes 2s linear reverse infinite;
+            }
+            @keyframes progress-bar-stripes {
+              0% {
+                background-position: 40px 0;
+              }
+              100% {
+                background-position: 0 0;
+              }
+            }
+            #active_targets .active_targets-time-left {
+                width: auto;
+                text-align: left;
+                font-size: 0.8rem;
+                margin-left: 10px;
+            }
+            .active-target-remove-x {
+                margin-left: 10px;
+                opacity: 0.5;
+                cursor: pointer;
+                float: right;
+                transform: rotate(45deg);
+                font-size: 1.1rem;
+                line-height: 1rem;
+            }
+            .active-target-remove-x:hover {
+                opacity: 1;
+                font-size: 1.2rem;
+            }
         `;
 
         // Create style document
@@ -13488,6 +14107,12 @@
         "XNOR": (a, b) => !a == !b,
         "AND!": (a, b) => a && !b,
         "OR!": (a, b) => a || !b,
+        "A?B": (a, b) => a,
+        "!A?B": (a, b) => !a,
+    }
+    const checkCustom = {
+        "A?B": "Special check, uses Var2 as result if Var1 is truthy",
+        "!A?B": "Special check, uses Var2 as result if Var1 is falsy",
     }
 
     const argType = {
@@ -13748,13 +14373,15 @@
             tableElement = tableElement.next();
             tableElement.append(buildConditionArg(override, 1));
             tableElement = tableElement.next();
-            tableElement.append(buildConditionComparator(override));
+            tableElement.append(buildConditionComparator(override, rebuild));
             tableElement = tableElement.next();
             tableElement.append(buildConditionType(override, 2, rebuild));
             tableElement = tableElement.next();
             tableElement.append(buildConditionArg(override, 2));
             tableElement = tableElement.next();
+            if (!checkCustom[override.cmp]) {
             tableElement.append(buildConditionRet(override, type, options));
+            }
             tableElement = tableElement.next();
             tableElement.append(buildConditionRemove(settingName, i, rebuild));
         }
@@ -13892,13 +14519,14 @@
         }) : "";
     }
 
-    function buildConditionComparator(override) {
-        let translateCondition = {"AND":"与", "OR":"或", "NOR":"或非", "NAND":"与非", "XOR":"异或", "XNOR":"同或", "AND!":"与(变量2取非)", "OR!":"或(变量2取非)"}; let types = Object.entries(checkCompare).map(([id, fn]) => `<option value="${id}" title="${fn.toString().substr(10)}">${typeof(translateCondition[id])!="undefined"?translateCondition[id]:id}</option>`).join();
+    function buildConditionComparator(override, rebuild) {
+        let translateCondition = {"AND":"与", "OR":"或", "NOR":"或非", "NAND":"与非", "XOR":"异或", "XNOR":"同或", "AND!":"与(变量2取非)", "OR!":"或(变量2取非)", "A?B":"?(变量1为真时，返回变量2)", "!A?B":"?(变量1为假时，返回变量2)"}; let types = Object.entries(checkCompare).map(([id, fn]) => `<option value="${id}" title="${fn.toString().substr(10)}">${typeof(translateCondition[id])!="undefined"?translateCondition[id]:id}</option>`).join();
         return $(`<select style="width: 100%">${types}</select>`)
         .val(override.cmp)
         .on('change', function() {
             override.cmp = this.value;
             updateSettingsFromState();
+            rebuild();
         });
     }
 
@@ -13973,7 +14601,7 @@
         return listNode;
     }
 
-    function addSettingsToggle(node, settingName, labelText, hintText) {
+    function addSettingsToggle(node, settingName, labelText, hintText, enabledCallBack, disabledCallBack) {
         return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
             <label title="${hintText}" tabindex="0" class="switch">
@@ -13987,9 +14615,18 @@
             updateSettingsFromState();
 
             $(".script_" + settingName).prop('checked', settingsRaw[settingName]);
+            if (settingsRaw[settingName] && enabledCallBack) {
+                enabledCallBack();
+            }
+            if (!settingsRaw[settingName] && disabledCallBack) {
+                disabledCallBack();
+            }
         })
         .on('click', {label: `${labelText} (${settingName})`, name: settingName, type: "boolean"}, openOverrideModal)
         .appendTo(node);
+        if (settingsRaw[settingName] && enabledCallBack) {
+            enabledCallBack();
+        }
     }
 
     function addSettingsNumber(node, settingName, labelText, hintText) {
@@ -14176,12 +14813,14 @@
             resetGeneralSettings(true);
             updateSettingsFromState();
             updateGeneralSettingsContent();
+            removeActiveTargetsUI();
 
-            resetCheckbox("masterScriptToggle", "showSettings", "autoPrestige", "autoAssembleGene");
+            resetCheckbox("masterScriptToggle", "showSettings", "autoPrestige");
             // No need to call showSettings callback, it enabled if button was pressed, and will be still enabled on default settings
         };
 
         buildSettingsSection(sectionId, sectionName, resetFunction, updateGeneralSettingsContent);
+        buildActiveTargetsUI();
     }
 
     function updateGeneralSettingsContent() {
@@ -14212,6 +14851,8 @@
         addSettingsHeader1(currentNode, "自动点击");
         addSettingsToggle(currentNode, "buildingAlwaysClick", "是否总是自动收集资源", "默认情况下脚本只在游戏初期自动收集资源，开启此项后将一直自动收集资源");
         addSettingsNumber(currentNode, "buildingClickPerTick", "每时刻最高点击次数", "每时刻自动收集资源的点击次数。只在库存未满的范围内有效。");
+        addSettingsHeader1(currentNode, "附加界面");
+        addSettingsToggle(currentNode, "activeTargetsUI", "显示详细的队列", "在右侧追加界面，可以显示当前激活的建筑队列，研究队列，触发器以及它们相应的资源。", buildActiveTargetsUI, removeActiveTargetsUI);
 
         document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
@@ -14252,7 +14893,7 @@
             if (isPrestigeAllowed()) {
                 let confirmationText = "";
                 if (this.value === "mad" && haveTech("mad")) {
-                    confirmationText = "相互毁灭已研究。";
+                    confirmationText = "共同毁灭原则已研究。";
                 } else if (this.value === "bioseed" && isBioseederPrestigeAvailable()) {
                     confirmationText = "生命播种飞船已经就绪。";
                 } else if (this.value === "cataclysm" && isCataclysmPrestigeAvailable()) {
@@ -14260,11 +14901,11 @@
                 } else if (this.value === "whitehole" && isWhiteholePrestigeAvailable()) {
                     confirmationText = "奇异灌输已经可以研究了。";
                 } else if (this.value === "apocalypse" && isApocalypsePrestigeAvailable()) {
-                    confirmationText = "《第66号技术协议》已经可以研究了。";
-                } else if (this.value === "ascension" && isAscensionPrestigeAvailable()) {
-                    confirmationText = "飞升装置已经建造并供能。";
-                } else if (this.value === "demonic" && isDemonicPrestigeAvailable()) {
-                    confirmationText = "已经到达了设定的楼层，且已击杀恶魔领主。";
+                    confirmationText = "66号协议已经可以研究了。";
+                } else if (this.value === "ascension" && (game.global.race['witch_hunter'] ? isWitchAscensionPrestigeAvailable() : isAscensionPrestigeAvailable())) {
+                    confirmationText = (game.global.race['witch_hunter'] ? "灵魂之间已经建造并供能。" : "飞升装置已经建造并供能。");
+                } else if (this.value === "demonic" && (game.global.race['witch_hunter'] ? isWitchAscensionPrestigeAvailable(true) : isDemonicPrestigeAvailable())) {
+                    confirmationText = (game.global.race['witch_hunter'] ? "灵魂之间已经建造并供能。" : "已经到达了设定的楼层，且已击杀恶魔领主。");
                 } else if (this.value === "terraform" && buildings.RedTerraform.isUnlocked()) {
                     confirmationText = "大气重塑器已经建造并供能。";
                 } else if (this.value === "matrix" && buildings.TauStarBluePill.isUnlocked()) {
@@ -14347,6 +14988,7 @@
         let currentNode = $(`#script_${secondaryPrefix}governmentContent`);
         currentNode.empty().off("*");
 
+        addSettingsNumber(currentNode, "generalRequestedTaxRate", "强制税率", "尽可能将税率设为该数值，忽略士气。设为-1则忽略该选项");
         addSettingsNumber(currentNode, "generalMinimumTaxRate", "最低允许税率", "自动税率使用的最低税率。如果资金满了，将可能低于此数值。");
         addSettingsNumber(currentNode, "generalMinimumMorale", "最低允许士气", "设置最低允许的士气。少于100%士气可能引起税收抵制，请尽量不要设置到100%以下。另外请记得天气的影响");
         addSettingsNumber(currentNode, "generalMaximumMorale", "最高允许士气", "设置最高允许的士气。如果士气超过此数值，将提高税率");
@@ -14800,6 +15442,7 @@
             <option value = "unlocked" title = "当相应研究解锁时，视为满足条件">解锁时</option>
             <option value = "researched" title = "当进行相应研究后，视为满足条件">研究后</option>
             <option value = "built" title = "当相应建筑的数量达到相应数值后，视为满足条件">建造时</option>
+            <option value = "chain" title = "当上一条触发器完成后，视为满足条件，列表中第一个触发器的条件总被视为满足">连锁时</option>
           </select>`);
         typeSelectNode.val(trigger.requirementType);
 
@@ -14986,6 +15629,47 @@
         return textBox;
     }
 
+    function buildActiveTargetsUI() {
+        if (settingsRaw.activeTargetsUI && !$("#active_targets-wrapper").length) {
+            $("#buildQueue").before(`
+                <div id="active_targets-wrapper" class="bldQueue vscroll right">
+                    <h2 class="has-text-success">详细的队列</h2>
+                    <div id="active_targets">
+                        <div class="target-type-box triggers" style="display: none;">
+                            <h2>触发器</h2>
+                            <ul class="active_targets-list triggers"></ul>
+                        </div>
+                        <div class="target-type-box buildings" style="display: none;">
+                            <h2>建筑</h2>
+                            <ul class="active_targets-list buildings"></ul>
+                        </div>
+                        <div class="target-type-box research" style="display: none;">
+                            <h2>研究</h2>
+                            <ul class="active_targets-list research"></ul>
+                        </div>
+                        <div class="target-type-box arpa" style="display: none;">
+                            <h2>A.R.P.A.</h2>
+                            <ul class="active_targets-list arpa"></ul>
+                        </div>
+                    </div>
+                </div>`);
+            if (typeof ResizeObserver === 'function') {
+                const resizeObserver = new ResizeObserver((entries) => {
+                    for (const entry of entries) {
+                        if (entry.borderBoxSize) {
+                            const elementHeight = entry.borderBoxSize[0].blockSize;
+                            const totalHeight = `${elementHeight + $(`#buildQueue`).outerHeight()}px`;
+                            $("#msgQueue").css('max-height', `calc((100vh - ${totalHeight}) - 6rem)`);
+                        }
+                    }
+                });
+                resizeObserver.observe($("#active_targets-wrapper")[0]);
+            }
+        }
+    }
+    function removeActiveTargetsUI() {
+        $("#active_targets-wrapper").remove();
+    }
     function buildResearchSettings() {
         let sectionId = "research";
         let sectionName = "研究";
@@ -15234,6 +15918,9 @@
         addSettingsNumber(currentNode, "fleetEmbassyKnowledge", "建造大使馆的知识阈值", "建造大使馆后，海盗的活动会更加剧烈，因此脚本只会在到达相应数值的知识上限时进行建造。");
         addSettingsNumber(currentNode, "fleetAlienGiftKnowledge", "研究外星礼物的知识阈值", "研究外星礼物后，海盗的活动会更加剧烈，因此脚本只会在到达相应数值的知识上限时进行研究。");
         addSettingsNumber(currentNode, "fleetAlien2Knowledge", "进行第五星系任务的知识阈值", "进行第五星系任务后，海盗的活动会更加剧烈，因此脚本只会在到达相应数值的知识上限时进行研究。另外，除非您能够无损伤地完成任务，否则脚本也不会自动进行此任务。");
+        let alien2AssaultOptions = [{val: "none", label: "无损失", hint: "最小总战力为650。无损失"},
+                              {val: "suicide", label: "自杀式任务", hint: "当战力评级达到400时进行进攻。会造成损失"}];
+        addSettingsSelect(currentNode, "fleetAlien2Loses", "第五星系任务", "当达到设置条件时发起进攻。应维持在默认设置, 除非您在进行速刷，能够在承担损失的同时快速完成游戏", alien2AssaultOptions);
 
         let assaultOptions = [{val: "ignore", label: "不自动进行", hint: "不会自动进行幽冥星系任务"},
                               {val: "high", label: "严重损失", hint: "使用混合舰队进行幽冥星系任务，损失极大(1250以上总战力，损失500左右战力的舰队)"},
@@ -15565,7 +16252,7 @@
 
         for (let i = 0; i < MarketManager.priorityList.length; i++) {
             const resource = MarketManager.priorityList[i];
-            newTableBodyText += `<tr value="${resource.id}" class="script-draggable"><td id="script_market_${resource.id}" style="width:15%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+            newTableBodyText += `<tr value="${resource.id}" class="script-draggable"><td id="script_market_${resource.id}" style="width:15%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%;border-right-width:1px"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
         }
         tableBodyNode.append($(newTableBodyText));
 
@@ -15755,23 +16442,59 @@
             updateSettingsFromState();
             updateTraitSettingsContent();
 
-            resetCheckbox("autoMinorTrait", "autoMutateTraits");
+            resetCheckbox("autoMinorTrait", "autoMutateTraits", "autoGenetics");
         };
 
         buildSettingsSection(sectionId, sectionName, resetFunction, updateTraitSettingsContent);
     }
 
+    function updateImitateWarning() {
+        let race = races[settingsRaw.imitateRace];
+        if (race) {
+            const raceAvaialableForImitate = race && game.global.stats.synth[race.id];
+            if (raceAvaialableForImitate) {
+                $("#script_imitate_warning").html(`<span class="has-text-success">您用该种族进行过人工智能觉醒，可以仿制它的特质。</span>`);
+            } else {
+                $("#script_imitate_warning").html(`<span class="has-text-danger">注意！您还没有用该种族进行过人工智能觉醒，无法仿制它的特质。</span>`);
+            }
+        } else {
+            $("#script_imitate_warning").empty();
+        }
+    }
     function updateTraitSettingsContent() {
         let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
 
         let currentNode = $('#script_traitContent');
         currentNode.empty().off("*");
-
+        addStandardHeading(currentNode, "主修特质");
         let genusOptions = [{val: "ignore", label: "忽略", hint: "不变换种群"},
                             {val: "none", label: game.loc(`genelab_genus_none`)},
                             ...Object.values(game.races).map(r => r.type).filter((g, i, a) => g && g !== "organism" && g !== "synthetic" && a.indexOf(g) === i).map(g => (
                             {val: g, label: game.loc(`genelab_genus_${g}`)}))];
         addSettingsSelect(currentNode, "shifterGenus", "拟态种群", "拟态特质选择相应种群。如果您想要对此项进行进阶设置，请注意切换拟态特质将刷新游戏页面，切换过于频繁将影响游戏运行。", genusOptions);
+        const imitateOptions = [{
+                val: "ignore",
+                label: "忽略",
+                hint: "不仿制种族。重要提示：如果不选择任何种族，脚本将卡在进化阶段"
+            },
+            ...Object.values(races)           
+                .map(race => {
+                const label = game.global.stats.synth[race.id] ? race.name : `--${race.name}--`
+                return {
+                    val: race.id,
+                    label,
+                    hint: race.desc
+                }
+            })];
+        addSettingsSelect(currentNode, "imitateRace", "仿制种族", "仿制所选择的种族。", imitateOptions).on('change', 'select', function() {
+            state.evolutionTarget = null;
+            updateImitateWarning();
+            let content = document.querySelector('#script_evolutionSettings .script-content');
+            content.style.height = null;
+            content.style.height = content.offsetHeight + "px"
+        });
+        currentNode.append(`<div><span id="script_imitate_warning"></span></div>`);
+        updateImitateWarning();
 
         let shrineOptions = [{val: "any", label: "任意类型", hint: "只要资源足够就建造圣地"},
                              {val: "equally", label: "平均分配", hint: "平均建造所有类型的圣地"},
@@ -15781,10 +16504,32 @@
                              {val: "tax", label: "税收", hint: "只建造提升税收的圣地"}];
         addSettingsSelect(currentNode, "buildingShrineType", "圣地种类偏好", "只在对应月相时建造相应的圣地", shrineOptions);
         addSettingsNumber(currentNode, "slaveIncome", "购买奴隶的最低收入", "脚本只在资金达到上限，或者是资金收入达到相应数值时购买奴隶");
+        let psychicOptions = [{val: "none", label: "忽略", hint: "脚本忽略管理灵能能量"},
+                              {val: "auto", label: "由脚本管理", hint: "按照以下顺序执行可用的行动: 捕获, 洗脑, 提升利润, 提升资源产量, 提升战斗力。"},
+                               ...["boost", "murder", "assault", "profit", "stun", "mind_break"].map(p =>
+                               ({val: p, label: game.loc(`psychic_${p}_title`), hint: game.loc(`psychic_${p}_desc`)}))];
+        addSettingsSelect(currentNode, "psychicPower", "灵能能量", "将选中的能力激活并赋能。 如有需要，将会自动使用10次灵能谋杀以研究高等能量。", psychicOptions);
+        let psychicBoost = [{val: "auto", label: "由脚本管理", hint: "自动选择未达到上限、且在加速后拥有最高收入的资源。"},
+                             ...Object.values(resources).filter(r => r.atomicMass > 0).map(r => ({val: r.id, label: r.title}))];
+        addSettingsSelect(currentNode, "psychicBoostRes", "加速资源", "通过灵能能量加速资源产出", psychicBoost);
         addSettingsToggle(currentNode, "jobScalePop", "拥有人口众多特质时自动工作倍率提升", "自动工作将自动将相应阈值乘以该倍率，以匹配人口数量");
 
         // Minor Traits
         addStandardHeading(currentNode, "次要特质");
+        let sequenceOptions = [{val: "none", label: "忽略", hint: "忽略脚本设置，由游戏内置功能与玩家手动管理"},
+                               {val: "enabled", label: "启用", hint: "启用基因测序"},
+                               {val: "disabled", label: "禁用", hint: "禁用基因测序"},
+                               {val: "decode", label: "编译", hint: "仅编译基因, 不进行突变"}];
+        addSettingsSelect(currentNode, "基因序列", "测序", "管理基因编译及突变", sequenceOptions);
+        let boostOptions = [{val: "none", label: "忽略", hint: "忽略脚本设置，由游戏内置功能与玩家手动管理"},
+                            {val: "enabled", label: "启用", hint: "启用基因加速合成"},
+                            {val: "disabled", label: "禁用", hint: "禁用基因加速合成"}];
+        addSettingsSelect(currentNode, "基因加速", "加速测序", "管理测序加速合成", boostOptions);
+        let assembleOptions = [{val: "none", label: "忽略", hint: "忽略脚本设置，由游戏内置功能与玩家手动管理"},
+                               {val: "enabled", label: "启用", hint: "启用自动测序"},
+                               {val: "disabled", label: "禁用", hint: "禁用自动测序"},
+                               {val: "auto", label: "脚本自动管理", hint: "由脚本自动组装基因，将使用比知识产量略高一点的速率进行组装"}];
+        addSettingsSelect(currentNode, "geneticsAssemble", "自动组装基因", "自动管理基因编译及突变", assembleOptions);
         currentNode.append(`
           <table style="width:100%">
             <tr>
@@ -16227,9 +16972,10 @@
     }
 
     function updateProductionTableReplicator(currentNode) {
-        addStandardHeading(currentNode, "物质复制器");
+        addStandardHeading(currentNode, "复制器");
 
-        addSettingsToggle(currentNode, 'replicatorAssignGovernorTask', '分派总督任务', '启用时，总督任务将自动管理物质复制器，以及同时分配电量。')
+        addSettingsToggle(currentNode, 'replicatorAssignGovernorTask', '分配总督任务', '启用后将自动把总督任务设置为调度复制器，自动调节使用的电力。');
+        addSettingsToggle(currentNode, 'replicatorAccordingBuildingWeight', '根据建筑权重', '启用后将根据建筑权重，生产高权重建筑需要的资源，忽略下方设置。');
 
         currentNode.append(`
         <table style="width:100%">
@@ -16274,6 +17020,7 @@
     function updateMagicPylon(currentNode) {
         addStandardHeading(currentNode, "水晶塔");
         addSettingsNumber(currentNode, "productionRitualManaUse", "法力产量使用的比例", "仪式使用的法力产量比例。不建议设为1，这样会使法力产量为零。只在法力未达到上限时生效，达到上限后将使用所有法力产量。");
+        addSettingsToggle(currentNode, "productionRitualSafe", "安全仪式", "限制仪式所使用法力的最大值，确保怀疑度不会超过上限。在猎巫行动剧情模式以外没有效果。");
 
         currentNode.append(`
           <table style="width:100%">
@@ -16331,10 +17078,12 @@
 
         addSettingsToggle(currentNode, "jobSetDefault", "设置默认工作", "自动以石工->伐木工人->水晶矿工->拾荒者->农民->猎人->失业人口的顺序设置默认工作");
         addSettingsToggle(currentNode, "jobManageServants", "管理鼬仆", "自动管理鼬仆，它们将被当成普通工人来处理。");
+        addSettingsToggle(currentNode, "scavengerServants", "拾荒鼠鼠", "自动管理鼬仆，它们将去捡垃圾。");
         addSettingsNumber(currentNode, "jobLumberWeighting", "最终伐木工人权重", "用于分配伐木工人，石工，水晶矿工和拾荒者的数量");
         addSettingsNumber(currentNode, "jobQuarryWeighting", "最终石工权重", "用于分配伐木工人，石工，水晶矿工和拾荒者的数量");
         addSettingsNumber(currentNode, "jobCrystalWeighting", "最终水晶矿工权重", "用于分配伐木工人，石工，水晶矿工和拾荒者的数量");
         addSettingsNumber(currentNode, "jobScavengerWeighting", "最终拾荒者权重", "用于分配伐木工人，石工，水晶矿工和拾荒者的数量");
+        addSettingsNumber(currentNode, "jobRaiderWeighting", "最终掠夺者权重", "用于分配伐木工人，石工，水晶矿工，掠夺者和拾荒者的数量");
         addSettingsToggle(currentNode, "jobDisableMiners", "到达仙女座星系以后禁用矿工", "到达仙女座星系以后禁用矿工和煤矿工人");
 
         currentNode.append(`
@@ -16486,6 +17235,7 @@
         addWeightingRule(tableBodyNode, "轨道衰减", "地面及月球建筑", "buildingWeightingTemporal");
         addWeightingRule(tableBodyNode, "智械黎明", "到达天仓五之后的太阳系建筑", "buildingWeightingSolar");
         addWeightingRule(tableBodyNode, "众鼬任务", "与主宰成就冲突的接触众鼬选项", "buildingWeightingOverlord");
+        addWeightingRule(tableBodyNode, "血湖后建筑权重", "到达血湖之后的地面、星系、星际建筑", "buildingWeightingAfterLake");
 
         document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
@@ -17093,13 +17843,13 @@
             createSettingToggle(togglesNode, 'autoFactory', '自动工厂', '自动管理工厂的生产。');
             createSettingToggle(togglesNode, 'autoMiningDroid', '自动采矿机器人', '自动管理采矿机器人的生产。');
             createSettingToggle(togglesNode, 'autoGraphenePlant', '自动石墨烯厂', '自动管理石墨烯厂的燃料。无法手动控制，会自动使用需求最少的燃料。');
-            createSettingToggle(togglesNode, 'autoAssembleGene', '自动组装基因', '当知识满了以后，自动进行基因重组。');
-            createSettingToggle(togglesNode, 'autoMinorTrait', '自动次要基因', '根据相应的权重，自动使用基因购买次要特质。也可以控制拟态特质选择的种群。');
+            createSettingToggle(togglesNode, 'autoGenetics', '自动基因管理', '管理基因设置，并且比游戏内置功能更加有效率地自动组装基因。');
+            createSettingToggle(togglesNode, 'autoMinorTrait', '自动次要基因', '根据相应的权重，自动使用基因购买次要特质。也可以控制拟态特质选择的种群，以及灵能能量。');
             createSettingToggle(togglesNode, 'autoMutateTraits', '自动修改特质', '自动增删主修特质和种群特质。注意：会花费质粒和反质粒。');
             createSettingToggle(togglesNode, 'autoEject', '自动质量喷射', '将多余的资源用于黑洞质量喷射。普通资源将在接近上限时用于喷射，锻造物将在超过需求时用于喷射。当总督任务为质量喷射时不启用。', createEjectToggles, removeEjectToggles);
             createSettingToggle(togglesNode, 'autoSupply', '自动补给', '将多余的资源用于补给。普通资源将在接近上限时用于补给，锻造物将在超过需求时用于补给。优先级高于质量喷射器。', createSupplyToggles, removeSupplyToggles);
             createSettingToggle(togglesNode, 'autoNanite', '自动纳米体', '将资源转化为纳米体。普通资源将在接近上限时用于转化，锻造物将在超过需求时用于转化。优先级高于补给和质量喷射器。');
-            createSettingToggle(togglesNode, 'autoReplicator', '自动物质复制器', '将多余的电量转化为物质。');
+            createSettingToggle(togglesNode, 'autoReplicator', '自动复制器', '将多余的电力用于复制资源。');
 
             createQuickOptions(togglesNode, "s-quick-prestige-options", "威望重置", buildPrestigeSettings);
 
@@ -17183,8 +17933,8 @@
                 state.soulGemIncomes = state.soulGemIncomes.splice(i+1);
             }
             let timePassed = currentSec - state.soulGemIncomes[0].sec;
-            resources.Soul_Gem.rateOfChange = gems / timePassed;
-            let gph = gems / timePassed * 60*(game.global.frameFactor?game.global.frameFactor:1);
+            let gph = gems / timePassed * 60*(game.global.frameFactor?game.global.frameFactor:1);;
+            state.soulGemPerHour = gph;
             if (gph >= 1000) { gph = Math.round(gph); }
             $("#resSoul_Gem span:eq(2)").text(`${gems > 0 && currentSec <= 3600 ? '~' : ''}${getNiceNumber(gph)} /m`);
         }
@@ -17200,6 +17950,12 @@
                 }
                 if (oldStats.sac > 0) {
                     statsData.sacrificed = oldStats.sac;
+                }
+                if (oldStats.murders > 0) {
+                    statsData.murders = oldStats.murders;
+                }
+                if (oldStats.psykill > 0) {
+                    statsData.psymurders = oldStats.psykill;
                 }
                 let statsString = `<div class="cstat"><span class="has-text-success">上周目数据</span></div>`;
                 for (let [label, value] of Object.entries(statsData)) {
@@ -17520,12 +18276,14 @@
 
     // main.js -> Soldier Healing
     function getHealingRate() {
-        let hc = game.global.race['artifical']
-          ? buildings.BootCamp.count
-          : buildings.Hospital.count;
+        let hc = 
+          (game.global.race['orbit_decayed'] && game.global.race['truepath']) ? buildings.EnceladusBase.stateOnCount :
+          game.global.race['artifical'] ? buildings.BootCamp.count :
+          buildings.Hospital.count;
         if (game.global.race['rejuvenated'] && game.global.stats.achieve['lamentis']){
             hc += Math.min(game.global.stats.achieve.lamentis.l, 5);
         }
+        hc *= (state.astroSign === 'cancer' ? 1.05 : 1);
         hc *= game.global.tech['medic'] || 1;
         hc += (game.global.race['fibroblast'] * 2) || 0;
         if (game.global.city.s_alter?.regen > 0){
@@ -17568,6 +18326,7 @@
         lb += buildings.Hospital.count * (haveTech('reproduction', 2) ? 1 : 0);
         lb += game.global.genes['birth'] ?? 0;
         lb += game.global.race['promiscuous'] ?? 0;
+        lb *= (state.astroSign === 'sagittarius' ? 1.25 : 1);
         lb *= traitVal("high_pop", 2, 1);
         lb *= (game.global.city.biome === 'taiga' ? 1.5 : 1);
         let base = resources.Population.currentQuantity * (game.global.city.ptrait.includes('toxic') ? 1.25 : 1);
@@ -17583,6 +18342,7 @@
     }
 
     function getCostConflict(action) {
+        let conflict = {};
         for (let priorityTarget of state.conflictTargets) {
             let blockKnowledge = true;
             for (let res in priorityTarget.cost) {
@@ -17593,11 +18353,12 @@
             }
             for (let res in priorityTarget.cost) {
                 if ((res !== "Knowledge" || blockKnowledge) && priorityTarget.cost[res] > resources[res].currentQuantity - action.cost[res]) {
-                    return {res: resources[res], obj: priorityTarget};
+                    const resList = conflict.resList || [];
+                    conflict = {res: resources[res], obj: priorityTarget, resList: [...new Set([...resList, res])]};
                 }
             }
         }
-        return null;
+        return $.isEmptyObject(conflict) ? null : conflict;
     }
 
     function getRealNumber(amountText) {
@@ -17640,7 +18401,7 @@
     }
 
     function isEarlyGame() {
-        if (game.global.race['cataclysm'] || game.global.race['orbit_decayed']) {
+        if (game.global.race['cataclysm'] || game.global.race['orbit_decayed'] || game.global.race['lone_survivor']) {
             return false;
         } else if (game.global.race['truepath'] || game.global.race['sludge']) {
             return !haveTech("high_tech", 7);
@@ -17782,6 +18543,7 @@
 
     var poly = {
     // Taken directly from game code with no functional changes, and minified.
+        astrologySign: function(){let t=new Date;if(0===t.getMonth()&&t.getDate()>=20||1===t.getMonth()&&18>=t.getDate())return"aquarius";if(1===t.getMonth()&&t.getDate()>=19||2===t.getMonth()&&20>=t.getDate())return"pisces";if(2===t.getMonth()&&t.getDate()>=21||3===t.getMonth()&&19>=t.getDate())return"aries";if(3===t.getMonth()&&t.getDate()>=20||4===t.getMonth()&&20>=t.getDate())return"taurus";if(4===t.getMonth()&&t.getDate()>=21||5===t.getMonth()&&21>=t.getDate())return"gemini";else if(5===t.getMonth()&&t.getDate()>=22||6===t.getMonth()&&22>=t.getDate())return"cancer";else if(6===t.getMonth()&&t.getDate()>=23||7===t.getMonth()&&22>=t.getDate())return"leo";else if(7===t.getMonth()&&t.getDate()>=23||8===t.getMonth()&&22>=t.getDate())return"virgo";else if(8===t.getMonth()&&t.getDate()>=23||9===t.getMonth()&&22>=t.getDate())return"libra";else if(9===t.getMonth()&&t.getDate()>=23||10===t.getMonth()&&22>=t.getDate())return"scorpio";else if(10===t.getMonth()&&t.getDate()>=23||11===t.getMonth()&&21>=t.getDate())return"sagittarius";else if(11===t.getMonth()&&t.getDate()>=22||0===t.getMonth()&&19>=t.getDate())return"capricorn";else return"time itself is broken"},
         // export function arpaAdjustCosts(costs) from arpa.js
         arpaAdjustCosts: function(t){return t=function(t){var r=traitVal('creative',1,'-');if(r<1){var a={};return Object.keys(t).forEach(function(e){a[e]=function(){return t[e]()*r}}),a}return t}(t),poly.adjustCosts({cost:t})},
         // function govPrice(gov) from civics.js
@@ -17807,7 +18569,7 @@
         // export universeAffix(universe) from achieve.js
         universeAffix: function(e){switch(e=e||game.global.race.universe){case"evil":return"e";case"antimatter":return"a";case"heavy":return"h";case"micro":return"m";case"magic":return"mg";default:return"l"}},
         // export const genus_traits from species.js (added spores:1 to fungi manually)
-        genus_traits: {humanoid:{adaptable:1,wasteful:1},carnivore:{carnivore:1,beast:1,cautious:1},herbivore:{herbivore:1,instinct:1},small:{small:1,weak:1},giant:{large:1,strong:1},reptilian:{cold_blooded:1,scales:1},avian:{hollow_bones:1,rigid:1},insectoid:{high_pop:1,fast_growth:1,high_metabolism:1},plant:{sappy:1,asymmetrical:1},fungi:{detritivore:1,spongy:1,spores:1},aquatic:{submerged:1,low_light:1},fey:{elusive:1,iron_allergy:1},heat:{smoldering:1,cold_intolerance:1},polar:{chilled:1,heat_intolerance:1},sand:{scavenger:1,nomadic:1},demonic:{immoral:1,evil:1,soul_eater:1},angelic:{blissful:1,pompous:1,holy:1},synthetic:{artifical:1,powered:1}},
+        genus_traits: {humanoid:{adaptable:1,wasteful:1},carnivore:{carnivore:1,beast:1,cautious:1},herbivore:{herbivore:1,instinct:1},small:{small:1,weak:1},giant:{large:1,strong:1},reptilian:{cold_blooded:1,scales:1},avian:{flier:1,hollow_bones:1,sky_lover:1},insectoid:{high_pop:1,fast_growth:1,high_metabolism:1},plant:{sappy:1,asymmetrical:1},fungi:{detritivore:1,spongy:1,spores:1},aquatic:{submerged:1,low_light:1},fey:{elusive:1,iron_allergy:1},heat:{smoldering:1,cold_intolerance:1},polar:{chilled:1,heat_intolerance:1},sand:{scavenger:1,nomadic:1},demonic:{immoral:1,evil:1,soul_eater:1},angelic:{blissful:1,pompous:1,holy:1},synthetic:{artifical:1,powered:1},eldritch:{psychic:1,tormented:1,darkness:1,unfathomable:1}},
         // export const neg_roll_traits from races.js
         neg_roll_traits: ['diverse','arrogant','angry','lazy','paranoid','greedy','puny','dumb','nearsighted','gluttony','slow','hard_of_hearing','pessimistic','solitary','pyrophobia','skittish','nyctophilia','frail','atrophy','invertebrate','pathetic','invertebrate','unorganized','slow_regen','snowy','mistrustful','fragrant','freespirit','hooved','heavy','gnawer'],
 
