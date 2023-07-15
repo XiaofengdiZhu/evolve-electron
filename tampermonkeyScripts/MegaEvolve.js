@@ -11,6 +11,7 @@
 // @author       schoeggu
 // @author       销锋镝铸
 // @match        http://localhost:4400/
+// @match        https://xiaofengdizhu.github.io/MegaEvolve/
 // @grant        none
 // ==/UserScript==
 //
