@@ -1,21 +1,17 @@
 // ==UserScript==
-// @name         Evolve
+// @name         MegaEvolve
 // @namespace    http://tampermonkey.net/
-// @version      3.3.1.108.28 for 超进化
+// @version      3.3.1.108.28 for 超进化 20230716
 // @description  try to take over the world!
-// @downloadURL  https://gist.github.com/Vollch/b1a5eec305558a48b7f4575d317d7dd1/raw/evolve_automation.user.js
-// @updateURL    https://gist.github.com/Vollch/b1a5eec305558a48b7f4575d317d7dd1/raw/evolve_automation.meta.js
+// @downloadURL  https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/MegaEvolve.js
+// @updateURL    https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/Meta/MegaEvolve.meta.js
 // @author       Fafnir
 // @author       TMVictor
 // @author       Vollch
 // @author       schoeggu
 // @author       销锋镝铸
-// @match        https://g8hh.github.io/evolve/
-// @match        https://pmotschmann.github.io/Evolve/
 // @match        http://localhost:4400/
 // @grant        none
-// @require      https://code.jquery.com/jquery-3.6.0.min.js
-// @require      https://code.jquery.com/ui/1.12.1/jquery-ui.min.js
 // ==/UserScript==
 //
 // This script forked from TMVictor's script version 3.3.1. Original script: https://gist.github.com/TMVictor/3f24e27a21215414ddc68842057482da
@@ -5009,14 +5005,23 @@
                 resources[res].currentQuantity -= cost[res];
             }
 
+            let shipList = getVueById('shipList');
             if (yard.sort) {
                 $("#shipPlans .b-checkbox").eq(1).click()
                 this._fleetVue.build();
-                getVueById('shipReg0')?.setLoc(region, yard.ships.length);
+                if(shipList.setLoc){
+                    shipList.setLoc(region, yard.ships.length-1);
+                }else{
+                    getVueById('shipReg0')?.setLoc(region, yard.ships.length-1);
+                }
                 $("#shipPlans .b-checkbox").eq(1).click()
             } else {
                 this._fleetVue.build();
-                getVueById('shipReg0')?.setLoc(region, yard.ships.length);
+                if(shipList.setLoc){
+                    shipList.setLoc(region, yard.ships.length-1);
+                }else{
+                    getVueById('shipReg0')?.setLoc(region, yard.ships.length-1);
+                }
             }
             return true;
         },
@@ -9838,7 +9843,7 @@
         }
 
         var replicatorTaskIndex = Object.values(game.global.race.governor.tasks).findIndex(task => task === 'replicate');
-
+        let govOffice = getVueById("govOffice");
         // If the replicator task is not yet assigned, assign it to the first free slot
         if (replicatorTaskIndex == -1) {
             replicatorTaskIndex = Object.values(game.global.race.governor.tasks).findIndex(task => task === 'none');
@@ -9848,25 +9853,31 @@
                 return;
             }
 
-            getVueById("govOffice").setTask('replicate', replicatorTaskIndex);
+            govOffice.setTask('replicate', replicatorTaskIndex);
         }
         let inputEvent = new Event('input');
         if (game.global.race.governor.config.replicate.pow.cap != 2000000) {
+            if(govOffice.setReplicatePowCap){
+                govOffice.setReplicatePowCap(2000000);
+            }else{
             let repConfigPowCap = document.querySelectorAll(".tConfig")[8].querySelectorAll(".storage")[0].querySelectorAll(".b-numberinput input")[0];
             repConfigPowCap.value = 2000000; //设置“至多使用电力”
             repConfigPowCap.dispatchEvent(inputEvent);
+            }
         }
-        let repConfigPowBuffer = document.querySelectorAll(".tConfig")[8].querySelectorAll(".storage")[0].querySelectorAll(".b-numberinput input")[1];
         let powerBuffer = 5;
         for (let unlockedBuilding of buildingList) {
             if (unlockedBuilding.powered > powerBuffer) {
                 powerBuffer = unlockedBuilding.powered;
             }
+        }
+        if(govOffice.setReplicatePowBuffer){
+            govOffice.setReplicatePowCap(Math.ceil(powerBuffer * 3));
+        }else{
+            let repConfigPowBuffer = document.querySelectorAll(".tConfig")[8].querySelectorAll(".storage")[0].querySelectorAll(".b-numberinput input")[1];
             repConfigPowBuffer.value = Math.ceil(powerBuffer * 3); //设置“可用电力缓冲值”，为可建造建筑最大耗电量的3倍（倍率可自行修改）
             repConfigPowBuffer.dispatchEvent(inputEvent);
-
         }
-
         if (game.global.race.governor.config.replicate.pow.on == false) {
             win.document.querySelector('#govOffice .options').getElementsByClassName('tConfig')[8].childNodes[1].childNodes[0].childNodes[0].click() // Enable auto power management
         }
@@ -12534,12 +12545,13 @@
 
         if (update && state.tabHash !== oldHash){
             let mainVue = win.$('#mainColumn > div:first-child')[0].__vue__;
+            let oldTab = game.global.settings.civTabs;
             mainVue.s.civTabs = 7;
             mainVue.s.tabLoad = false;
             mainVue.toggleTabLoad();
             mainVue.s.tabLoad = true;
             mainVue.toggleTabLoad();
-            mainVue.s.civTabs = game.global.settings.civTabs;
+            mainVue.s.civTabs = oldTab;
             return true;
         } else {
             return false;
@@ -18483,7 +18495,7 @@
             if(result){
                 return result;
             }else{
-                console.log(elementId);
+                console.log("虚拟节点中未找到"+elementId);
                 return undefined;
             }
         }else{
@@ -18491,7 +18503,6 @@
         if (element === null || !element.__vue__) {
             return undefined;
         }
-
         return element.__vue__;
         }
     }
@@ -18590,3 +18601,4 @@
 
     $().ready(mainAutoEvolveScript);
 })($);
+console.log("脚本已载入：Evolve 3.3.1.108.28 for 超进化");

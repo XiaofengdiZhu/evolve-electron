@@ -1,7 +1,9 @@
 // ==UserScript==
 // @name         自动队列
-// @version      1.0 for 超进化
+// @version      1.0 for 超进化 20230716
 // @author       销锋镝铸
+// @downloadURL  https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/自动队列.js
+// @updateURL    https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/Meta/自动队列.meta.js
 // ==/UserScript==
 
 (function() {
@@ -49,7 +51,8 @@
         speed: 67,
         stopCount: 67
     }];
-    let intervalTimes = 0
+    let completedBuilding=[];
+    let intervalTimes = 0;
     let intervalId = window.setInterval(function() {
         //判断是否需要初始化
         if (++intervalTimes > 500) {
@@ -59,9 +62,9 @@
             clearInterval(intervalId_temp)
             return;
         }
-        let completed = 0;
-        buildings.forEach((building) => {
+        buildings.forEach((building,index) => {
             try {
+                if(completedBuilding.indexOf(index)>-1)return;
                 let temp = evolve.global[building.action][building.id];
                 if (!temp) { return; }
                 let nowCount = temp.count;
@@ -75,13 +78,13 @@
                         }
                     }
                 } else {
-                    completed++;
+                    completedBuilding.push(index);
                 }
             } catch (error) {
                 console.log(error);
             }
         });
-        if (completed >= buildings.length) {
+        if (completedBuilding.length >= buildings.length) {
             clearInterval(intervalId);
         }
     }, 2000);

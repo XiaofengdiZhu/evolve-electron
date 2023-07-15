@@ -1,19 +1,13 @@
 // ==UserScript==
 // @name         evolve历史数据统计
 // @namespace    http://tampermonkey.net/
-// @version      1.4.5 for 超进化
+// @version      1.4.5.3 for 超进化 20230716
 // @description  try to take over the world!
-// @downloadURL  https://github.com/DSLM/evolve-script/raw/master/history/evolve_history.user.js
+// @downloadURL  https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/历史数据统计.js
+// @updateURL    https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/Meta/历史数据统计.meta.js
 // @author       DSLM
-// @match        https://g8hh.github.io/evolve/
-// @match        https://pmotschmann.github.io/Evolve/
+// @author       销锋镝铸
 // @match        http://localhost:4400/
-// @grant        none
-// @require      https://code.jquery.com/jquery-3.6.0.min.js
-// @require      https://code.jquery.com/ui/1.12.1/jquery-ui.min.js
-// @require      https://unpkg.com/@popperjs/core@2.9.2/dist/umd/popper.min.js
-// @require      https://d3js.org/d3.v7.min.js
-// @require      https://cdn.bootcdn.net/ajax/libs/dagre-d3/0.6.4/dagre-d3.min.js
 // ==/UserScript==
 
 //下面两行是依赖
@@ -36,15 +30,6 @@
         UniStoL[UniLtoS[lon]] = lon;
     });
     var starName = ['未获得', '无星', '白星', '铜星', '银星', '金星'];
-	var prestigeName = {
-        "plasmid":"质粒",
-        "antiplasmid":"反质粒",
-        "phage":"噬菌体",
-        "dark":"暗能量",
-        "Harmony":"和谐水晶",
-        "blood":"鲜血之石",
-        "artifact":"上古遗物"
-    };
     const AchiDivWid = 350, AchiDivCol = 3;
     const FeatDivWid = 150, FeatDivCol = 3;
     const PillDivWid = 140, PillDivCol = 3;
@@ -291,8 +276,8 @@
                 if (oldGlobal.stats.dark > 0) {
                     statsData.dark_earned = oldGlobal.stats.dark;
                 }
-                if (oldGlobal.prestige.Harmony.count > 0) {
-                    statsData.Harmony_earned = oldGlobal.prestige.Harmony.count;
+                if (oldGlobal.stats.harmony > 0) {
+                    statsData.harmony_earned = oldGlobal.stats.harmony;
                 }
                 if (oldGlobal.stats.blood > 0) {
                     statsData.blood_earned = oldGlobal.stats.blood;
@@ -347,18 +332,10 @@
                 }
                 else if(label.includes("_earned"))
                 {
-                    let calData;
-                    if(label.includes("Harmony"))
-                    {
-                        calData = (i == 0) ? (evolve.global.prestige[label.slice(0,-7)].count - value) : (historyData[i-1][label] - value);
-                    }
-                    else
-                    {
-                        calData = (i == 0) ? (evolve.global.stats[label.slice(0,-7)] - value) : (historyData[i-1][label] - value);
-                    }
+                    var calData = (i == 0) ? (evolve.global.stats[label.slice(0,-7)] - value) : (historyData[i-1][label] - value);
                     if(calData == 0) continue;
                     if(calData % 1 > 0) calData = calData.toFixed(2);
-                    $("#recoList").append($(`<tr><td class="has-text-warning">${prestigeName[label.slice(0,-7)]}：</td><td>${calData}</td></tr>`));
+                    $("#recoList").append($(`<tr><td class="has-text-warning">${evolve.loc("achieve_stats_" + label)}</td><td>${calData}</td></tr>`));
                 }
                 else if(label=="nextStartTime"){
                     if(i<historyData.length-1 && historyData[i+1].nextStartTime)
@@ -378,7 +355,7 @@
                 }
             }
         }
-        $("#recoFilter").append($(`<div class='has-text-advanced'>能统计的平均倍速为${(totalDays*5000/totalTime).toFixed(1)}，平均历时${(totalTime/totalCount/3600000).toFixed(4)}小时</div>`));
+        $("#recoFilter").append($(`<div class='has-text-advanced' style="max-width:20em">最近${totalCount}周目的平均倍速为${(totalDays*5000/totalTime).toFixed(1)}，平均历时${(totalTime/totalCount/3600000).toFixed(4)}小时，平均游戏天数${(totalDays/totalCount).toFixed(1)}</div>`));
     }
 
     function spireStat()
@@ -1370,6 +1347,8 @@
     	extinct_unicorn: ['species'],
     	extinct_synth: ['species'],
     	extinct_nano: ['species'],
+    	extinct_ghast: ['species'],
+    	extinct_shoggoth: ['species'],
     	extinct_junker: ['species', 'perk', 'scenario'],
     	extinct_sludge: ['species', 'perk', 'challenge'],
     	extinct_custom: ['species'],
@@ -1392,6 +1371,7 @@
     	genus_demonic: ['genus'],
     	genus_angelic: ['genus', 'universe'],
     	genus_synthetic: ['genus'],
+    	genus_eldritch: ['genus'],
     	explorer: ['biome', 'reset', 'perk'],
     	biome_grassland: ['biome'],
     	biome_oceanic: ['biome'],
@@ -1433,6 +1413,8 @@
     	pw_apocalypse: ['reset', 'universe'],
     	fullmetal: ['progression', 'universe'],
     	pass: ['reset'],
+    	soul_sponge: ['challenge', 'universe'],
+    	nightmare: ['challenge', 'reset', 'universe'],
         joyless: ['progression', 'challenge'],
     	steelen: ['challenge', 'reset', 'perk'],
     	dissipated: ['reset', 'challenge', 'perk'],
@@ -1567,6 +1549,14 @@
                     "银星："+loc("achieve_perks_lamentis4")(),
                     "金星："+loc("achieve_perks_lamentis5")()];
         }},
+        {src:['soul_sponge', 'achieve' ],
+        desc(){
+            return [loc("achieve_perks_soul_sponge",["100/200/300/400/500"])()];
+        }},
+        {src:['nightmare', 'achieve' ],
+        desc(){
+            return [loc("achieve_perks_nightmare")()];
+        }},
         {src:['gladiator', 'achieve' ],
         desc(){
             return [loc("achieve_perks_gladiator",["20% / +40% / +60% / +80% / +100"])()];
@@ -1593,24 +1583,34 @@
         {src:['novice', 'feat' ],
         desc(){
             return [loc("achieve_perks_novice",["0.5 / +1 / +1.5 / +2 / +2.5","0.25 / +0.5 / +0.75 / +1 / +1.25"])(),
-                    loc("achieve_perks_novice2")()];
+                    loc("achieve_perks_novice2")(),
+                    loc(`wiki_perks_progress_note1`,[10,loc(`wiki_resets_mad`)()])(),
+                    loc(`wiki_perks_progress_note2`)()];
         }},
         {src:['journeyman', 'feat' ],
         desc(){
             return [loc("achieve_perks_journeyman2",["1 / +1 / +2 / +2 / +3","0 / +1 / +1 / +2 / +2"])(),
-                    loc("achieve_perks_journeyman3")()];
+                    loc("achieve_perks_journeyman3")(),
+                    loc(`wiki_perks_progress_note1`,[25,loc(`wiki_resets_bioseed`)()])(),
+                    loc(`wiki_perks_progress_note2`)()];
         }},
         {src:['adept', 'feat' ],
         desc(){
-            return [loc("achieve_perks_adept",["100 / 200 / 300 / 400 / 500","60 / +120 / +180 / +240 / +300"])()];
+            return [loc("achieve_perks_adept",["100 / 200 / 300 / 400 / 500","60 / +120 / +180 / +240 / +300"])(),
+                    loc(`wiki_perks_progress_note1`,[50,loc(`wiki_resets_blackhole`)()])(),
+                    loc(`wiki_perks_progress_note2`)()];
         }},
         {src:['master', 'feat' ],
         desc(){
-            return [loc("achieve_perks_master",["1/2/3/4/5", "2/4/6/8/10", loc('evo_mitochondria_title'), loc('evo_eukaryotic_title'), loc('evo_membrane_title'), loc('evo_organelles_title'), loc('evo_nucleus_title')])()];
+            return [loc("achieve_perks_master",["1/2/3/4/5", "2/4/6/8/10", loc('evo_mitochondria_title'), loc('evo_eukaryotic_title'), loc('evo_membrane_title'), loc('evo_organelles_title'), loc('evo_nucleus_title')])(),
+                    loc(`wiki_perks_progress_note1`,[75,loc(`wiki_resets_ascension`)()])(),
+                    loc(`wiki_perks_progress_note2`)()];
         }},
         {src:['grandmaster', 'feat' ],
         desc(){
-            return [loc("achieve_perks_grandmaster",["1/2/3/4/5"])()];
+            return [loc("achieve_perks_grandmaster",["1/2/3/4/5"])(),
+                    loc(`wiki_perks_progress_note1`,[100,loc(`wiki_resets_infusion`)()])(),
+                    loc(`wiki_perks_progress_note2`)()];
         }}
     ];
 
@@ -1631,12 +1631,14 @@
 	        'extinct_arraak','extinct_pterodacti','extinct_dracnid','extinct_entish','extinct_cacti','extinct_pinguicula','extinct_sporgar',
 	        'extinct_shroomi','extinct_moldling','extinct_mantis','extinct_scorpid','extinct_antid','extinct_sharkin','extinct_octigoran','extinct_dryad',
 	        'extinct_satyr','extinct_phoenix','extinct_salamander','extinct_yeti','extinct_wendigo','extinct_tuskin','extinct_kamel','extinct_balorg',
-	        'extinct_imp','extinct_seraph','extinct_unicorn','extinct_synth','extinct_nano','extinct_junker','extinct_sludge','extinct_custom'
+	        'extinct_imp','extinct_seraph','extinct_unicorn','extinct_synth','extinct_nano','extinct_ghast','extinct_shoggoth',
+	        'extinct_junker','extinct_sludge','extinct_custom'
 	    ],
 	    genus: [
 	        'creator','genus_humanoid','genus_carnivore','genus_herbivore','genus_small','genus_giant','genus_reptilian','genus_avian',
 	        //'creator','genus_humanoid','genus_carnivore','genus_omnivore','genus_herbivore','genus_small','genus_giant','genus_reptilian','genus_avian',
-	        'genus_insectoid','genus_plant','genus_fungi','genus_aquatic','genus_fey','genus_heat','genus_polar','genus_sand','genus_demonic','genus_angelic','genus_synthetic'
+	        'genus_insectoid','genus_plant','genus_fungi','genus_aquatic','genus_fey','genus_heat','genus_polar','genus_sand','genus_demonic','genus_angelic',
+	        'genus_synthetic','genus_eldritch'
 	    ],
 	    planet: [
 	        'explorer','biome_grassland','biome_oceanic','biome_forest','biome_desert','biome_volcanic','biome_tundra',
@@ -1646,7 +1648,7 @@
 	    ],
 	    universe: [
 	        'vigilante','squished','double_density','cross','macro','marble','heavyweight','whitehole','heavy','canceled',
-	        'eviltwin','microbang','pw_apocalypse','fullmetal','pass'
+	        'eviltwin','microbang','pw_apocalypse','fullmetal','pass','soul_sponge','nightmare'
 	    ],
 	    challenge: [
 	        'joyless','steelen','dissipated','technophobe','wheelbarrow','iron_will','failed_history','banana','pathfinder',
@@ -1773,6 +1775,11 @@
 	        name: loc("feat_slime_lord_name"),
 	        desc: loc("feat_slime_lord_desc"),
 	        flair: loc("feat_slime_lord_flair")
+	    },
+	    annihilation: {
+	        name: loc("feat_annihilation_name"),
+	        desc: loc("feat_annihilation_desc"),
+	        flair: loc("feat_annihilation_flair")
 	    },
 	    friday: {
 	        name: loc("feat_friday_name"),
@@ -2621,7 +2628,7 @@
 	        reqs: {},
 	        grant: ['blood',1],
 	        condition(){
-	            return global.resource.Blood_Stone.amount >= 1 ? true : false;
+	            return global.prestige.Blood_Stone.count >= 1 ? true : false;
 	        },
 	        cost: {
 	            Plasmid(){ return 1000; },
@@ -2990,7 +2997,9 @@
 	    microbang: ['micro'],
 	    pw_apocalypse: ['magic'],
 	    pass: ['magic'],
-	    fullmetal: ['magic']
+	    fullmetal: ['magic'],
+	    soul_sponge: ['magic'],
+	    nightmare: ['magic']
 	}
 	const icons = {
     	standard: {
