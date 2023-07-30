@@ -6,6 +6,7 @@
 // @updateURL    https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/Meta/自动蜂群卫星.meta.js
 // @match        http://localhost:4400/
 // @match        https://xiaofengdizhu.github.io/MegaEvolve/
+// @match        file:///*/MegaEvolve/index.html
 // @grant        none
 // ==/UserScript==
 

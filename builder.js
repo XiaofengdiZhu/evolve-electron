@@ -14,7 +14,7 @@ const options = {
     "appId": "xfdz.evolve-electron",
     "copyright": "Copyright © 2023 销锋镝铸",
     // "store” | “normal” | "maximum". - For testing builds, use 'store' to reduce build time significantly.
-    compression: "maximum",
+    compression: "store",
     removePackageScripts: true,
     nodeGypRebuild: false,
     buildDependenciesFromSource: false,
@@ -24,8 +24,11 @@ const options = {
         "ga4mp.js",
         "main.js",
         "preload.js",
-        "tampermonkeyScripts/**",
+        //"tampermonkeyScripts/**",
         "electron-prompt/**"
+    ],
+    extraResources:[
+        "extensions/**"
     ],
 
     win: {

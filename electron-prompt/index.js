@@ -38,7 +38,6 @@ const BrowserWindow = getElectronMainExport('BrowserWindow');
 const ipcMain = getElectronMainExport('ipcMain');
 
 function electronPrompt(options, parentWindow) {
-	console.log('electronPrompt');
 	return new Promise((resolve, reject) => {
 		const id = `${Date.now()}-${Math.random()}`;
 

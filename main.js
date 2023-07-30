@@ -8,7 +8,8 @@ const {
     dialog,
     Notification,
     nativeTheme,
-    session
+    session,
+    crashReporter
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -18,13 +19,15 @@ const { v4: uuidv4 } = require('uuid');
 const log = require('electron-log');
 const { autoUpdater } = require("electron-updater");
 const ga4mp = require("./ga4mp.js");
-
+const {ElectronChromeExtensions} = require("electron-chrome-extensions");
+crashReporter.start({ uploadToServer: false });
 if (require('electron-squirrel-startup')) return app.quit();
 
 const store = new Store();
 let userDataPath = app.getPath("userData");
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
+log.catchErrors();
 let ga4;
 
 let mainWindow,mainWindowID,mainWindowWebContents;
@@ -32,7 +35,7 @@ const createMainWindow = () => {
     mainWindow = new BrowserWindow({
         icon: __dirname + '/MegaEvolve/evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico',
         title: 'evolve-electron by 销锋镝铸',
-        width: store.get("mainWindow.bounds.width") ?? 1000,
+        width: store.get("mainWindow.bounds.width") ?? 1080,
         height: store.get("mainWindow.bounds.height") ?? 800,
         x: store.get("mainWindow.bounds.x") ?? undefined,
         y: store.get("mainWindow.bounds.y") ?? undefined,
@@ -89,34 +92,30 @@ const createMainWindow = () => {
     });
     mainWindowWebContents = mainWindow.webContents;
     if(store.get("stopBackgroundThrottling")??true)mainWindowWebContents.backgroundThrottling = false;
-    mainWindowWebContents.on('dom-ready', () => {
-        if (store.get("enableTampermonkeyScripts")) {
-            executeTampermonkeyScriptList();
+    session.defaultSession.loadExtension(path.join(__dirname.split("app.asar")[0], 'extensions', 'dhdgffkkebhmkfjojejmpbldmpobfkfo'), {allowFileAccess: true}).then(()=>{
+        switch(store.get("gameSource")){
+            case "inside":
+                mainWindow.loadFile('MegaEvolve/index.html').then(firstLoadPage);
+                break;
+            case "xiaofengdizhu":
+                mainWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then(firstLoadPage);
+                break;
+            case "pmotschmann":
+                mainWindow.loadURL("https://pmotschmann.github.io/Evolve/").then(firstLoadPage);
+                break;
+            case "g8hh":
+                mainWindow.loadURL("https://g8hh.github.io/evolve/").then(firstLoadPage);
+                break;
+            default:
+                mainWindow.loadFile('MegaEvolve/index.html').then(firstLoadPage);
         }
     });
-    switch(store.get("gameSource")){
-        case "inside":
-            mainWindow.loadFile('MegaEvolve/index.html').then(firstLoadPage);
-            break;
-        case "xiaofengdizhu":
-            mainWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then(firstLoadPage);
-            break;
-        case "pmotschmann":
-            mainWindow.loadURL("https://pmotschmann.github.io/Evolve/").then(firstLoadPage);
-            break;
-        case "g8hh":
-            mainWindow.loadURL("https://g8hh.github.io/evolve/").then(firstLoadPage);
-            break;
-        default:
-            mainWindow.loadFile('MegaEvolve/index.html').then(firstLoadPage);
-    }
 }
 
 function firstLoadPage() {
-    if (store.get("enableTampermonkeyScripts")) {
-        LoadTampermonkeyScript(true, true);
+    try {
         if(store.get("openAutoUpdate")??true){
-            autoUpdater.checkForUpdatesAndNotify().then();
+            //autoUpdater.checkForUpdatesAndNotify().then();
         }
         let events = [];
         if(!store.has("userID")){
@@ -126,6 +125,8 @@ function firstLoadPage() {
         ga4 = ga4mp.createClient("CZTsXj0VQGy8EV4NDF9Kiw", "G-K2QN2S0MSK", "evolve-electron", store.get("userID"));
         events.push({name : "login",params :{"method": "Windows"}});
         ga4.send(events);
+    }catch (e) {
+        log.error(e);
     }
 }
 
@@ -154,16 +155,40 @@ app.whenReady().then(() => {
     if(store.get("powerSaveBlocker")??true){
         powerSaveBlockerID=powerSaveBlocker.start('prevent-app-suspension');
     }
+    new ElectronChromeExtensions({
+        session: session.defaultSession,
+        createTab: (details) => {
+            const win =
+                typeof details.windowId === 'number' &&
+                this.windows.find((w) => w.id === details.windowId)
+            if (!win) {
+                throw new Error(`Unable to find windowId=${details.windowId}`)
+            }
+            const tab = win.tabs.create()
+            if (details.url) tab.loadURL(details.url || newTabUrl)
+            if (typeof details.active === 'boolean' ? details.active : true) win.tabs.select(tab.id)
 
-    let scriptsFolderPath = path.join(userDataPath, "tampermonkeyScripts\\");
-    fs.access(scriptsFolderPath, fs.constants.W_OK, (err) => {
-        if (err) {
-            fs.cp(path.join(__dirname, 'tampermonkeyScripts\\'), scriptsFolderPath, {recursive: true}, (err) => {
-                console.log(err);
-            });
+            return [tab.webContents, tab.window]
+        },
+        selectTab: (tab, browserWindow) => {
+            const win = this.getWindowFromBrowserWindow(browserWindow)
+            win?.tabs.select(tab.id)
+        },
+        removeTab: (tab, browserWindow) => {
+            const win = this.getWindowFromBrowserWindow(browserWindow)
+            win?.tabs.remove(tab.id)
+        },
+        createWindow: (details) => {
+            const win = this.createWindow({
+                initialUrl: details.url || newTabUrl,
+            })
+            return win.window
+        },
+        removeWindow: (browserWindow) => {
+            const win = this.getWindowFromBrowserWindow(browserWindow)
+            win?.destroy()
         }
     });
-
     createMainWindow();
 
     app.on('activate', () => {
@@ -182,12 +207,23 @@ app.on('quit', () => {
 })
 
 app.on('web-contents-created', (event, contents) => {
-    contents.setWindowOpenHandler(({url,features}) => {
-        if (url.toLowerCase().split("#")[0].endsWith("evolve/wiki.html")) {
+    contents.setWindowOpenHandler(({url}) => {
+        let str = url.toLowerCase().split("#")[0];
+        if (str.endsWith("evolve/wiki.html")) {
             return {
                 action: "allow",
                 overrideBrowserWindowOptions:{
                     icon: __dirname + '/MegaEvolve/evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico',
+                    width:1080,
+                    height:800,
+                    autoHideMenuBar: true,
+                    backgroundColor: nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"#292a2d":"#ffffff"
+                }
+            }
+        }else if(str.endsWith("options.html")){
+            return {
+                action: "allow",
+                overrideBrowserWindowOptions:{
                     width:1080,
                     height:800,
                     autoHideMenuBar: true,
@@ -202,8 +238,8 @@ app.on('web-contents-created', (event, contents) => {
         }
     });
     contents.on('will-navigate', (event,url) => {
-        url = url.toLowerCase().split("#")[0];
-        if (url.endsWith("evolve/") || url.endsWith("evolve/index.html") || url.endsWith("evolve/wiki.html")) {
+        let str = url.toLowerCase().split("#")[0];
+        if (str.endsWith("evolve/") || str.endsWith("evolve/index.html") || str.endsWith("evolve/wiki.html") || str.endsWith("options.html")) {
 
         } else {
             event.preventDefault();
@@ -238,7 +274,7 @@ function setMainMenu() {
                             checked: (store.get("gameSource")??"inside")==="inside",
                             click() {
                                 store.set("gameSource","inside");
-                                mainWindow.loadFile('evolve/index.html');
+                                mainWindow.loadFile('MegaEvolve/index.html');
                             }
                         },
                         {
@@ -415,58 +451,27 @@ function setMainMenu() {
             label: '脚本',
             submenu: [
                 {
-                    label: "启用",
-                    type: 'checkbox',
-                    checked: store.get("enableTampermonkeyScripts") ?? false,
+                    label: "脚本设置",
+                    sublabel: "篡改猴",
                     click() {
-                        let appMenu = Menu.getApplicationMenu();
-                        if (store.get("enableTampermonkeyScripts")) {
-                            store.set("enableTampermonkeyScripts", false);
-                            appMenu.getMenuItemById("reloadScripts").enabled = false;
-                            appMenu.getMenuItemById("openScriptsFolder").enabled = false;
-                            appMenu.getMenuItemById("scriptsList").enabled = false;
-                            dialog.showMessageBox({message: "脚本功能已关闭，重启生效"}).then();
-                        } else {
-                            store.set("enableTampermonkeyScripts", true);
-                            appMenu.getMenuItemById("reloadScripts").enabled = true;
-                            appMenu.getMenuItemById("openScriptsFolder").enabled = true;
-                            appMenu.getMenuItemById("scriptsList").enabled = true;
-                            new Notification({
-                                title: "evolve-electron",
-                                body: "脚本功能已打开",
-                                silent: true,
-                                icon: __dirname + '/MegaEvolve/evolved-withBackground.ico',
-                                timeoutType: "default"
-                            }).show();
-                            LoadTampermonkeyScript(false, true);
-                        }
+                        let tampermonkeyWindow = new BrowserWindow(
+                            {
+                                title:"篡改猴",
+                                parent:mainWindow,
+                                width:1080,
+                                height:800,
+                                autoHideMenuBar: true,
+                                backgroundColor: nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"#292a2d":"#ffffff"
+                            });
+                        tampermonkeyWindow.loadURL("chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html");
                     }
-                }, {
-                    label: "重新加载并刷新",
-                    id: "reloadScripts",
-                    enabled: store.get("enableTampermonkeyScripts") ?? false,
-                    click() {
-                        LoadTampermonkeyScript(true, false);
-                        mainWindow.webContents.reload();
-                    }
-                }, {
-                    label: "打开脚本文件夹",
-                    id: "openScriptsFolder",
-                    enabled: store.get("enableTampermonkeyScripts") ?? false,
-                    click() {
-                        shell.openPath(path.join(userDataPath, 'tampermonkeyScripts'));
-                    }
-                },{
+                },
+                {
                     label: "下载超进化脚本",
                     id: "openMegaEvolveScriptsWebsite",
                     click() {
                         shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron/tree/main/tampermonkeyScripts");
                     }
-                }, {
-                    label: "脚本列表",
-                    id: 'scriptsList',
-                    enabled: store.get("enableTampermonkeyScripts") ?? false,
-                    submenu: []
                 }
             ]
         },
@@ -476,7 +481,7 @@ function setMainMenu() {
                 {
                     label:"立即检测更新",
                     click(){
-                        autoUpdater.checkForUpdates().then((result)=>{
+                        /*autoUpdater.checkForUpdates().then((result)=>{
                             if(result){
                                 dialog.showMessageBox({
                                     type:"question",
@@ -497,7 +502,7 @@ function setMainMenu() {
                                     timeoutType: "default"
                                 }).show();
                             }
-                        });
+                        });*/
                     }
                 },
                 {
@@ -509,7 +514,7 @@ function setMainMenu() {
                             store.set("openAutoUpdate",false);
                         }else{
                             store.set("openAutoUpdate",true);
-                            autoUpdater.checkForUpdatesAndNotify().then();
+                            //autoUpdater.checkForUpdatesAndNotify().then();
                         }
                     }
                 },
@@ -528,115 +533,4 @@ function setMainMenu() {
         }
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-}
-
-let loadedTampermonkeyScript = false;
-let tampermonkeyScriptList = [];
-let tempScriptList = [];
-let cachedSciptDataList =[];
-function LoadTampermonkeyScript(force = false, exeImme = false) {
-    if (loadedTampermonkeyScript && !force) {
-        return;
-    }
-    tempScriptList = [];
-    cachedSciptDataList = [];
-    fs.readdir(path.join(userDataPath, 'tampermonkeyScripts'), (error, files) => {
-        if (error) {
-            console.log(error);
-        } else {
-            let regexp = /\/\/ @(\S*)\s*(.*)/i;
-            let scriptsListSubmenu = Menu.getApplicationMenu().getMenuItemById("scriptsList").submenu;
-            files.forEach(file => {
-                let data = fs.readFileSync(path.join(userDataPath, 'tampermonkeyScripts', file));
-                let infos = {};
-                data.toString('utf8').split('\n').filter((line) => line.startsWith('// @')).forEach((info) => {
-                    let result = info.replace(regexp, "$1《》$2").split("《》");
-                    switch (result[0]) {
-                        case "name":
-                            infos["name"] = result[1].trim();
-                            break;
-                        case "version":
-                            infos["version"] = "v" + result[1].trim();
-                            break;
-                        case "author":
-                            infos["author"] = result[1].trim();
-                            break;
-                    }
-                });
-                if (infos.name) {
-                    let fullName = infos.name + "by" + infos.author;
-                    let sameItem = tampermonkeyScriptList.some((item) => {
-                        return item.file === file && item.fullName === fullName
-                    });
-                    tempScriptList.push({"file": file, "fullName": fullName});
-                    if (!sameItem) {
-                        scriptsListSubmenu.append(new MenuItem({
-                            label: infos.name + " by " + infos.author,
-                            sublabel: infos.version,
-                            id: fullName,
-                            type: 'checkbox',
-                            checked: store.get("tampermonkeyScripts."+infos.name + "by" + infos.author) ?? false,
-                            click() {
-                                if (store.get("tampermonkeyScripts."+fullName)) {
-                                    store.set("tampermonkeyScripts."+fullName, false);
-                                } else {
-                                    store.set("tampermonkeyScripts."+fullName, true);
-                                    fs.readFile(path.join(userDataPath, 'tampermonkeyScripts', file), (error, data2) => {
-                                        if (error) {
-                                            console.log(error);
-                                        } else {
-                                            mainWindow.webContents.executeJavaScript(data2);
-                                        }
-                                    });
-                                }
-                            }
-                        }));
-                        if (exeImme && store.get("tampermonkeyScripts."+fullName)) {
-                            mainWindow.webContents.executeJavaScript(data);
-                        }
-                        cachedSciptDataList.push({fullName: fullName, data: data});
-                    }
-                    data = null;
-                }
-
-            });
-            tampermonkeyScriptList.forEach((loadedItem) => {
-                if (!tempScriptList.some((tempItem) => {
-                    return loadedItem.file === tempItem.file && loadedItem.file === tempItem.file;
-                })) {
-                    let menu = Menu.getApplicationMenu().getMenuItemById(loadedItem.fullName);
-                    menu.enabled = false;
-                    menu.sublabel = "失效";
-                }
-            });
-            tampermonkeyScriptList = JSON.parse(JSON.stringify(tempScriptList));
-        }
-    });
-    loadedTampermonkeyScript = true;
-}
-
-function executeTampermonkeyScriptList() {
-    tampermonkeyScriptList.forEach(item => {
-        if (item.fullName) {
-            /*fs.readFile(path.join(userDataPath, 'tampermonkeyScripts', item.file), (error, data) => {
-                if (error) {
-                    console.log(error);
-                    let menu = Menu.getApplicationMenu().getMenuItemById(item.fullName);
-                    menu.enabled = false;
-                    menu.sublabel = "失效";
-                } else {
-                    if (store.get("tampermonkeyScripts."+item.fullName)) {
-                        mainWindow.webContents.executeJavaScript(data);
-                    }
-                    data = null;
-                }
-            });*/
-            if(store.get("tampermonkeyScripts."+item.fullName)){
-                let cachedData = cachedSciptDataList.find(cached => cached.fullName === item.fullName);
-                if(cachedData){
-                    mainWindow.webContents.executeJavaScript(cachedData.data);
-                }
-            }
-        }
-    });
 }
