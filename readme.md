@@ -14,22 +14,13 @@ Because most modern web browsers limit the web games running in the background, 
 ## Download 下载
 [Click here 点我](https://github.com/XiaofengdiZhu/evolve-electron/releases)
 ## Scripts 脚本
-1. Click `脚本` button on the menubar, click `启用` button if this button is not checked, click `打开脚本文件夹` button.
-点击菜单栏的`脚本`按钮, 如果`启用`按钮还没勾选那么请点击它, 点击`打开脚本文件夹`按钮
-2. Put your Tampermonkey scripts to the opened folder, the scripts must have below codes at least(for example).
-把你的Tampermonkey脚本放到打开的文件夹，脚本必须至少有以下代码（示例）：
-```js
-// @name         evolve历史数据统计
-// @version      1.4.5.3
-// @author       DSLM
-```
-3. If the script includes `// @require`, you must copy the required codes into this script, like what I did for the [evolve历史数据统计](https://github.com/XiaofengdiZhu/evolve-electron/blob/master/tampermonkeyScripts/历史数据统计.1.4.4.9.js#L19).
-如果脚本中包含`// @require`，你必须复制它所require的代码到此脚本里，就像我为[历史数据统计](https://github.com/XiaofengdiZhu/evolve-electron/blob/master/tampermonkeyScripts/历史数据统计.js#L14)做的一样。
-4. Click `脚本` button on the menubar, click `重新加载并刷新` button, hover pointer on `脚本列表` then check your scripts.
-点击菜单栏的`脚本`按钮，点击`重新加载并刷新`按钮，将鼠标移到`脚本列表`上，勾选你的脚本。
+This feature is supported by [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) 这个功能由[篡改猴](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)提供支持
+How to use 如何使用  
+Click `脚本` button on the menubar, click `脚本设置` button, set the `Language` option to your language, click `Installed Userscripts` and add scripts.
+点击菜单栏的`脚本`按钮, 点击`脚本设置按钮`按钮，设置`Language`选项为你的语言，点击`已安装的脚本`并添加脚本。
 > **Attention 注意**  
-> For now, this app can not update the latest adapted scripts for MegaEvolve, if someday you find out the adapted scripts works badly, please download the latest scripts from here:
-> 目前这个软件无法自动更新超进化适配脚本，如果有一天你感觉脚本运行有问题，请从下面链接下载最新版脚本：  
+> You can get scripts for MegaEvolve from here:
+> 请从下面链接获取适配超进化的脚本：  
 > https://github.com/XiaofengdiZhu/evolve-electron/tree/main/tampermonkeyScripts
 
 ## Screenshot 截图
@@ -46,7 +37,7 @@ yarn start
 ```
 3. Build a installer. 构建一个安装程序。
 ```
-node.exe builder.js
+yarn build
 ```
 
 ## Key codes 关键代码

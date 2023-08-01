@@ -30,7 +30,7 @@ autoUpdater.logger.transports.file.level = 'info';
 log.catchErrors();
 let ga4;
 
-let mainWindow,mainWindowID,mainWindowWebContents;
+let mainWindow,mainWindowID,mainWindowWebContents,tampermonkeyWindow,tampermonkeyWindowOpened=false;
 const createMainWindow = () => {
     mainWindow = new BrowserWindow({
         icon: __dirname + '/MegaEvolve/evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico',
@@ -430,19 +430,21 @@ function setMainMenu() {
                     accelerator:"CommandOrControl+F",
                     click(){
                         let focusedWindow = BrowserWindow.getFocusedWindow();
-                        prompt({
-                            title: '页面内查找',
-                            label: '',
-                            type: 'input',
-                            value:store.get("mainWindow.search")??"",
-                            buttonLabels:{ok:"查找", cancel:"取消"},
-                            alwaysOnTop:true
-                        },focusedWindow).then(text => {
-                            if (text) {
-                                store.set("mainWindow.search", text);
-                                focusedWindow.webContents.findInPage(text);
-                            }
-                        });
+                        if(focusedWindow.title!=="页面内查找"){
+                            prompt({
+                                title: '页面内查找',
+                                label: '',
+                                type: 'input',
+                                value:store.get("mainWindow.search")??"",
+                                buttonLabels:{ok:"查找", cancel:"取消"},
+                                alwaysOnTop:true
+                            },focusedWindow).then(text => {
+                                if (text) {
+                                    store.set("mainWindow.search", text);
+                                    focusedWindow.webContents.findInPage(text);
+                                }
+                            });
+                        }
                     }
                 }
             ]
@@ -454,16 +456,25 @@ function setMainMenu() {
                     label: "脚本设置",
                     sublabel: "篡改猴",
                     click() {
-                        let tampermonkeyWindow = new BrowserWindow(
-                            {
-                                title:"篡改猴",
-                                parent:mainWindow,
-                                width:1080,
-                                height:800,
-                                autoHideMenuBar: true,
-                                backgroundColor: nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"#292a2d":"#ffffff"
+                        if(!tampermonkeyWindowOpened){
+                            tampermonkeyWindowOpened = true;
+                            tampermonkeyWindow = new BrowserWindow(
+                                {
+                                    title:"篡改猴",
+                                    parent:mainWindow,
+                                    width:1080,
+                                    height:800,
+                                    autoHideMenuBar: true,
+                                    backgroundColor: nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"#292a2d":"#ffffff"
+                                });
+                            tampermonkeyWindow.loadURL("chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html");
+                            tampermonkeyWindow.on("close",() => {
+                                tampermonkeyWindowOpened = false;
                             });
-                        tampermonkeyWindow.loadURL("chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html");
+                        }else{
+                            tampermonkeyWindow.moveTop();
+                            tampermonkeyWindow.center();
+                        }
                     }
                 },
                 {

@@ -6,10 +6,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron-forge start",
-    "package": "electron-forge package",
-    "make": "electron-forge make",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "build": "node builder.js"
   },
   "author": "销锋镝铸",
   "license": "MPL-2.0",
@@ -70,44 +67,5 @@
     "electron-updater": "^6.1.1",
     "ga4-mp": "^1.0.3",
     "uuid": "^9.0.0"
-  },
-  "config": {
-    "forge1": {
-      "packagerConfig": {
-        "appVersion": "${version}",
-        "name": "evolve-electron",
-        "appCopyright": "销锋镝铸",
-        "icon": "MegaEvolve/evolved.ico",
-        "win32metadata": {
-          "ProductName": "evolve-electron",
-          "CompanyName": "销锋镝铸",
-          "FileDescription": "evolve-electron by 销锋镝铸"
-        }
-      },
-      "makers": [
-        {
-          "name": "@electron-forge/maker-squirrel",
-          "config": {
-            "name": "evolve_electron",
-            "iconUrl": "https://github.com/XiaofengdiZhu/MegaEvolve/raw/master/evolved.ico",
-            "skipUpdateIcon": true
-          }
-        },
-        {
-          "name": "@electron-forge/maker-zip",
-          "platforms": [
-            "darwin"
-          ]
-        },
-        {
-          "name": "@electron-forge/maker-deb",
-          "config": {}
-        },
-        {
-          "name": "@electron-forge/maker-rpm",
-          "config": {}
-        }
-      ]
-    }
   }
 }
