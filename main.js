@@ -3,33 +3,34 @@ const {
     BrowserWindow,
     powerSaveBlocker,
     shell,
-    Menu,
-    MenuItem,
     dialog,
-    Notification,
+    Menu,
     nativeTheme,
     session,
     crashReporter
 } = require('electron');
 const path = require('path');
-const fs = require('fs');
 const Store = require('electron-store');
 const prompt = require('./electron-prompt/index.js');
 const { v4: uuidv4 } = require('uuid');
 const log = require('electron-log');
-const { autoUpdater } = require("electron-updater");
 const ga4mp = require("./ga4mp.js");
 const {ElectronChromeExtensions} = require("electron-chrome-extensions");
-crashReporter.start({ uploadToServer: false });
-if (require('electron-squirrel-startup')) return app.quit();
+const axios = require('axios');
+let notifier = require('node-notifier');
+const {WindowsToaster} = require("node-notifier");
 
+crashReporter.start({ uploadToServer: false });
 const store = new Store();
-let userDataPath = app.getPath("userData");
-autoUpdater.logger = log;
-autoUpdater.logger.transports.file.level = 'info';
 log.catchErrors();
 let ga4;
-
+if(process.platform==="win32"){
+    const WindowsToaster = notifier.WindowsToaster;
+    notifier = new WindowsToaster({
+        withFallback: false,
+        customPath: __dirname + "/snoretoast.exe"
+    });
+}
 let mainWindow,mainWindowID,mainWindowWebContents,tampermonkeyWindow,tampermonkeyWindowOpened=false;
 const createMainWindow = () => {
     mainWindow = new BrowserWindow({
@@ -45,6 +46,7 @@ const createMainWindow = () => {
             preload: path.join(__dirname, 'preload.js')
         }*/
     });
+    updateStartMenuIcon();
     mainWindowID = mainWindow.id;
     setMainMenu();
     if (store.get('mainWindow.isMaximized')) mainWindow.maximize();
@@ -65,30 +67,6 @@ const createMainWindow = () => {
     });
     mainWindow.on('page-title-updated', (event) => {
         event.preventDefault();
-    });
-    autoUpdater.on('update-available',(info)=>{
-        new Notification({
-            title: "evolve-electron",
-            body: "新版本"+info.version+"可用，正在自动下载",
-            icon: __dirname + '/MegaEvolve/evolved-withBackground.ico',
-            timeoutType: "default"
-        }).show();
-    });
-    autoUpdater.on('error', (err) => {
-        new Notification({
-            title: "evolve-electron",
-            body: "自动更新出错："+err.message,
-            icon: __dirname + '/MegaEvolve/evolved-withBackground.ico',
-            timeoutType: "default"
-        }).show();
-    });
-    autoUpdater.on('update-downloaded', (info) => {
-        new Notification({
-            title: "evolve-electron",
-            body: "已下载新版本"+info.version+"，将在下次打开时自动安装",
-            icon: __dirname + '/MegaEvolve/evolved-withBackground.ico',
-            timeoutType: "default"
-        }).show();
     });
     mainWindowWebContents = mainWindow.webContents;
     if(store.get("stopBackgroundThrottling")??true)mainWindowWebContents.backgroundThrottling = false;
@@ -115,7 +93,7 @@ const createMainWindow = () => {
 function firstLoadPage() {
     try {
         if(store.get("openAutoUpdate")??true){
-            //autoUpdater.checkForUpdatesAndNotify().then();
+            checkUpdate();
         }
         let events = [];
         if(!store.has("userID")){
@@ -232,7 +210,7 @@ app.on('web-contents-created', (event, contents) => {
             }
         } else {
             setImmediate(() => {
-                shell.openExternal(url);
+                shell.openExternal(url).then();
             });
             return {action: 'deny'};
         }
@@ -244,7 +222,7 @@ app.on('web-contents-created', (event, contents) => {
         } else {
             event.preventDefault();
             setImmediate(() => {
-                shell.openExternal(url);
+                shell.openExternal(url).then();
             });
         }
     });
@@ -481,7 +459,7 @@ function setMainMenu() {
                     label: "下载超进化脚本",
                     id: "openMegaEvolveScriptsWebsite",
                     click() {
-                        shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron/tree/main/tampermonkeyScripts");
+                        shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron/tree/main/tampermonkeyScripts").then();
                     }
                 }
             ]
@@ -492,28 +470,7 @@ function setMainMenu() {
                 {
                     label:"立即检测更新",
                     click(){
-                        /*autoUpdater.checkForUpdates().then((result)=>{
-                            if(result){
-                                dialog.showMessageBox({
-                                    type:"question",
-                                    cancelId:1,
-                                    buttons:["是","否"],
-                                    message: "检测到新版本"+result.updateInfo.version+"，是否前往下载？"
-                                }).then((response)=>{
-                                    if(response.response===0){
-                                        shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron/releases");
-                                    }
-                                });
-                            }else{
-                                new Notification({
-                                    title: "evolve-electron",
-                                    body: "未检测到新版本或检测失败",
-                                    silent: true,
-                                    icon: __dirname + '/MegaEvolve/evolved-withBackground.ico',
-                                    timeoutType: "default"
-                                }).show();
-                            }
-                        });*/
+                        checkUpdate();
                     }
                 },
                 {
@@ -525,7 +482,6 @@ function setMainMenu() {
                             store.set("openAutoUpdate",false);
                         }else{
                             store.set("openAutoUpdate",true);
-                            //autoUpdater.checkForUpdatesAndNotify().then();
                         }
                     }
                 },
@@ -533,7 +489,7 @@ function setMainMenu() {
                 {
                     label:"Github",
                     click(){
-                        shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron");
+                        shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron").then();
                     }
                 },
                 {
@@ -544,4 +500,101 @@ function setMainMenu() {
         }
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+function checkUpdate() {
+    axios.get("https://api.github.com/repos/XiaofengdiZhu/evolve-electron/releases/latest",{
+        timeout:10000,
+        responseType: "json"
+    }).then((response) => {
+        if(response.status === 200) {
+            let data = response.data;
+            if(data.tag_name === app.getVersion()){
+                notifier.notify({
+                        appID: "evolve-electron",
+                        title: "检测更新成功",
+                        message: "无新版本",
+                        icon: __dirname + "/MegaEvolve/evolved-withBackground.ico",
+                        sound: false,
+                        wait: false,
+                        timeout: 5
+                    });
+            }else {
+                dialog.showMessageBox({
+                    type: "question",
+                    cancelId: 1,
+                    buttons: ["是", "否"],
+                    message: "检测到新版本" + data.tag_name + "，是否前往下载？"
+                }).then((response) => {
+                    if (response.response === 0) {
+                        shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron/latest").then();
+                    }
+                });
+            }
+        }else{
+            checkUpdateFailed();
+        }
+    }).catch((error) => {
+        checkUpdateFailed();
+    });
+}
+
+function checkUpdateFailed(){
+    notifier.notify({
+            appID: "evolve-electron",
+            title: "检测更新失败",
+            message: "您可以点击此处前往Github Release页面主动检查是否有新版本，当前版本为"+ app.getVersion(),
+            icon: __dirname + "/MegaEvolve/evolved-withBackground.ico",
+            sound: false,
+            wait: false,
+            timeout: 5
+        },
+        function (error, response, metadata) {
+            if(response===undefined && error == null){
+                shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron/latest").then();
+            }
+        });
+}
+
+function updateStartMenuIcon() {
+    if (process.platform==="win32") {
+        const toastActivatorClsid = "849c2549-fe1e-4aa6-bb93-4690993ccb89";
+
+        const appID = "evolve-electron";
+        app.setAppUserModelId(appID);
+
+        const appLocation = process.execPath;
+        const appData = app.getPath("appData");
+
+        // continue if not in dev mode / running portable app
+        if (__dirname.includes("app.asar") && !appLocation.startsWith(path.join(appData, "..", "Local", "Temp"))) {
+            // shortcutPath can be anywhere inside AppData\Roaming\Microsoft\Windows\Start Menu\Programs\
+            const shortcutPath = path.join(appData, "Microsoft", "Windows", "Start Menu", "Programs", "evolve-electron.lnk");
+            // check if shortcut doesn't exist -> create it, if it exists and invalid -> update it
+            try {
+                const shortcutDetails = shell.readShortcutLink(shortcutPath); // throws error if it doesn't exist yet
+                // validate shortcutDetails
+                if (
+                    shortcutDetails.target !== appLocation ||
+                    shortcutDetails.appUserModelId !== appID ||
+                    shortcutDetails.toastActivatorClsid !== toastActivatorClsid
+                ) {
+                    throw "needUpdate";
+                }
+                // if the execution got to this line, the shortcut exists and is valid
+            } catch (error) { // if not valid -> Register shortcut
+                shell.writeShortcutLink(
+                    shortcutPath,
+                    error === "needUpdate" ? "update" : "create",
+                    {
+                        target: appLocation,
+                        cwd: path.dirname(appLocation),
+                        description: "an Electron app that you can play Evolve in it.\n一个用于玩Evolve的Electron套壳软件",
+                        appUserModelId: appID,
+                        toastActivatorClsid
+                    }
+                );
+            }
+        }
+    }
 }

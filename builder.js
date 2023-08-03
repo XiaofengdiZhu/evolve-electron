@@ -24,7 +24,7 @@ const options = {
         "ga4mp.js",
         "main.js",
         "preload.js",
-        //"tampermonkeyScripts/**",
+        "snoretoast.exe",
         "electron-prompt/**"
     ],
     extraResources:[
