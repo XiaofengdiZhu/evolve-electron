@@ -27,24 +27,28 @@ let ga4;
 if(process.platform==="win32"){
     const WindowsToaster = notifier.WindowsToaster;
     notifier = new WindowsToaster({
-        withFallback: false,
-        customPath: __dirname + "/snoretoast.exe"
+        withFallback: false
     });
 }
+let megaEvolvePath = path.join(__dirname.split("app.asar")[0], "MegaEvolve");
 let mainWindow,mainWindowID,mainWindowWebContents,tampermonkeyWindow,tampermonkeyWindowOpened=false;
 const createMainWindow = () => {
     mainWindow = new BrowserWindow({
-        icon: __dirname + '/MegaEvolve/evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico',
+        icon: path.join(megaEvolvePath,'evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico'),
         title: 'evolve-electron by 销锋镝铸',
         width: store.get("mainWindow.bounds.width") ?? 1080,
         height: store.get("mainWindow.bounds.height") ?? 800,
         x: store.get("mainWindow.bounds.x") ?? undefined,
         y: store.get("mainWindow.bounds.y") ?? undefined,
         autoHideMenuBar: store.get("mainWindow.autoHideMenuBar") ?? false,
-        backgroundColor: nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"#292a2d":"#ffffff"
-        /*webPreferences: {
-            preload: path.join(__dirname, 'preload.js')
-        }*/
+        backgroundColor: nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"#292a2d":"#ffffff",
+        webPreferences: {
+            //preload: path.join(__dirname, 'preload.js'),
+            backgroundThrottling: !(store.get("stopBackgroundThrottling")??true),
+            //offscreen: store.get("mainWindow.offscreen")??false,
+            frame: true,
+            titleBarStyle: "default"
+        }
     });
     updateStartMenuIcon();
     mainWindowID = mainWindow.id;
@@ -68,12 +72,10 @@ const createMainWindow = () => {
     mainWindow.on('page-title-updated', (event) => {
         event.preventDefault();
     });
-    mainWindowWebContents = mainWindow.webContents;
-    if(store.get("stopBackgroundThrottling")??true)mainWindowWebContents.backgroundThrottling = false;
     session.defaultSession.loadExtension(path.join(__dirname.split("app.asar")[0], 'extensions', 'dhdgffkkebhmkfjojejmpbldmpobfkfo'), {allowFileAccess: true}).then(()=>{
         switch(store.get("gameSource")){
             case "inside":
-                mainWindow.loadFile('MegaEvolve/index.html').then(firstLoadPage);
+                mainWindow.loadFile(path.join(megaEvolvePath,'index.html')).then(firstLoadPage);
                 break;
             case "xiaofengdizhu":
                 mainWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then(firstLoadPage);
@@ -85,7 +87,7 @@ const createMainWindow = () => {
                 mainWindow.loadURL("https://g8hh.github.io/evolve/").then(firstLoadPage);
                 break;
             default:
-                mainWindow.loadFile('MegaEvolve/index.html').then(firstLoadPage);
+                mainWindow.loadFile(path.join(megaEvolvePath,'index.html')).then(firstLoadPage);
         }
     });
 }
@@ -124,10 +126,13 @@ app.setAboutPanelOptions({
     applicationVersion: app.getVersion(),
     copyright: "by 销锋镝铸",
     credits: "an Electron app that you can play Evolve in it.\n一个用于玩Evolve的Electron套壳软件",
-    iconPath: __dirname + '/MegaEvolve/evolved.ico',
+    iconPath: path.join(megaEvolvePath,'evolved.ico'),
     website:"https://github.com/XiaofengdiZhu/evolve-electron"
 });
 app.enableSandbox();
+if(store.get("disableHardwareAcceleration")??false){
+    app.disableHardwareAcceleration();
+}
 let powerSaveBlockerID = null;
 app.whenReady().then(() => {
     if(store.get("powerSaveBlocker")??true){
@@ -191,7 +196,7 @@ app.on('web-contents-created', (event, contents) => {
             return {
                 action: "allow",
                 overrideBrowserWindowOptions:{
-                    icon: __dirname + '/MegaEvolve/evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico',
+                    icon: path.join(megaEvolvePath,'evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico'),
                     width:1080,
                     height:800,
                     autoHideMenuBar: true,
@@ -231,7 +236,7 @@ app.on('web-contents-created', (event, contents) => {
         new Notification({
             title: "evolve-electron",
             body: "渲染进程崩溃了，已尝试刷新页面\n错误代码：" + details.exitCode + "；原因：" + details.reason,
-            icon: __dirname + '/MegaEvolve/evolved-withBackground.ico',
+            icon: path.join(megaEvolvePath,'evolved-withBackground.ico'),
             timeoutType: "default"
         }).show();
     });
@@ -252,7 +257,7 @@ function setMainMenu() {
                             checked: (store.get("gameSource")??"inside")==="inside",
                             click() {
                                 store.set("gameSource","inside");
-                                mainWindow.loadFile('MegaEvolve/index.html');
+                                mainWindow.loadFile(path.join(megaEvolvePath,'index.html')).then();
                             }
                         },
                         {
@@ -262,7 +267,7 @@ function setMainMenu() {
                             checked: store.get("gameSource")==="xiaofengdizhu",
                             click() {
                                 store.set("gameSource","xiaofengdizhu");
-                                mainWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/");
+                                mainWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then();
                             }
                         },
                         {
@@ -272,7 +277,7 @@ function setMainMenu() {
                             checked: store.get("gameSource")==="pmotschmann",
                             click() {
                                 store.set("gameSource","pmotschmann");
-                                mainWindow.loadURL("https://pmotschmann.github.io/Evolve/");
+                                mainWindow.loadURL("https://pmotschmann.github.io/Evolve/").then();
                             }
                         },
                         {
@@ -282,7 +287,7 @@ function setMainMenu() {
                             checked: store.get("gameSource")==="g8hh",
                             click() {
                                 store.set("gameSource","g8hh");
-                                mainWindow.loadURL("https://g8hh.github.io/evolve/");
+                                mainWindow.loadURL("https://g8hh.github.io/evolve/").then();
                             }
                         }
                     ]
@@ -304,7 +309,7 @@ function setMainMenu() {
                             click() {
                                 nativeTheme.themeSource = "system";
                                 BrowserWindow.getAllWindows().forEach((win) => {
-                                    win.setIcon(__dirname + '/MegaEvolve/evolved'+(nativeTheme.shouldUseDarkColors?"-light":"")+'.ico');
+                                    win.setIcon(path.join(megaEvolvePath,'evolved'+(nativeTheme.shouldUseDarkColors?"-light":"")+'.ico'));
                                     win.setBackgroundColor(nativeTheme.shouldUseDarkColors?"#292a2d":"#ffffff");
                                 });
                                 store.set("mainWindow.theme", "system");
@@ -317,7 +322,7 @@ function setMainMenu() {
                             click() {
                                 nativeTheme.themeSource = "light";
                                 BrowserWindow.getAllWindows().forEach((win) => {
-                                    win.setIcon(__dirname + '/MegaEvolve/evolved.ico');
+                                    win.setIcon(path.join(megaEvolvePath,'evolved.ico'));
                                     win.setBackgroundColor("#ffffff");
                                 });
                                 store.set("mainWindow.theme", "light");
@@ -330,7 +335,7 @@ function setMainMenu() {
                             click() {
                                 nativeTheme.themeSource = "dark";
                                 BrowserWindow.getAllWindows().forEach((win) => {
-                                    win.setIcon(__dirname + '/MegaEvolve/evolved-light.ico');
+                                    win.setIcon(path.join(megaEvolvePath,'evolved-light.ico'));
                                     win.setBackgroundColor("#292a2d");
                                 });
                                 store.set("mainWindow.theme", "dark");
@@ -367,6 +372,40 @@ function setMainMenu() {
                         }
                     }
                 },
+                {
+                    label: "离屏渲染模式",
+                    sublabel: "自动重启后生效",
+                    type: "checkbox",
+                    checked: store.get("mainWindow.offscreen")??false,
+                    click() {
+                        if(store.get("mainWindow.offscreen")??false){
+                            store.set("mainWindow.offscreen",false);
+                            app.relaunch();
+                            app.exit();
+                        }else{
+                            store.set("mainWindow.offscreen",true);
+                            app.relaunch();
+                            app.exit();
+                        }
+                    }
+                },
+                {
+                    label: "禁用硬件加速",
+                    sublabel: "配合离屏渲染模式可加速，自动重启后生效",
+                    type: "checkbox",
+                    checked: store.get("disableHardwareAcceleration")??false,
+                    click() {
+                        if(store.get("disableHardwareAcceleration")??false){
+                            store.set("disableHardwareAcceleration",false);
+                            app.relaunch();
+                            app.exit();
+                        }else{
+                            store.set("disableHardwareAcceleration",true);
+                            app.relaunch();
+                            app.exit();
+                        }
+                    }
+                },
                 {type: 'separator'},
                 {label: "刷新", role: 'reload'},
                 {label: "清除缓存并刷新", role: 'forceReload'},
@@ -392,13 +431,15 @@ function setMainMenu() {
                             }
                             focusedWindow.menuBarVisible = false;
                             focusedWindow.autoHideMenuBar = true;
-                            new Notification({
-                                title: "evolve-electron",
-                                body: "按住alt显示菜单栏",
-                                silent: true,
-                                icon: __dirname + '/MegaEvolve/evolved-withBackground.ico',
-                                timeoutType: "default"
-                            }).show();
+                            notifier.notify({
+                                appID: "evolve-electron",
+                                title: "提示",
+                                message: "按键盘上的Alt显示菜单栏",
+                                icon: path.join(megaEvolvePath,"evolved-withBackground.ico"),
+                                sound: false,
+                                wait: false,
+                                timeout: 5
+                            });
                         }
                     }
                 },
@@ -514,7 +555,7 @@ function checkUpdate() {
                         appID: "evolve-electron",
                         title: "检测更新成功",
                         message: "无新版本",
-                        icon: __dirname + "/MegaEvolve/evolved-withBackground.ico",
+                        icon: path.join(megaEvolvePath,"evolved-withBackground.ico"),
                         sound: false,
                         wait: false,
                         timeout: 5
@@ -524,10 +565,19 @@ function checkUpdate() {
                     type: "question",
                     cancelId: 1,
                     buttons: ["是", "否"],
-                    message: "检测到新版本" + data.tag_name + "，是否前往下载？"
+                    message: "检测到新版本" + data.tag_name + "，是否下载？"
                 }).then((response) => {
                     if (response.response === 0) {
-                        shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron/latest").then();
+                        let url;
+                        for(let asset of data["assets"]){
+                            if(asset["name"].endsWith(".exe")){
+                                url = asset["browser_download_url"];
+                                break;
+                            }
+                        }
+                        if(url){
+                            shell.openExternal(url).then();
+                        }
                     }
                 });
             }
@@ -544,21 +594,22 @@ function checkUpdateFailed(){
             appID: "evolve-electron",
             title: "检测更新失败",
             message: "您可以点击此处前往Github Release页面主动检查是否有新版本，当前版本为"+ app.getVersion(),
-            icon: __dirname + "/MegaEvolve/evolved-withBackground.ico",
+            icon: path.join(megaEvolvePath,"evolved-withBackground.ico"),
             sound: false,
             wait: false,
+            actions: ["前往Github Release"],
             timeout: 5
         },
         function (error, response, metadata) {
-            if(response===undefined && error == null){
-                shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron/latest").then();
+            if((metadata && metadata.action==="buttonClicked") || (response===undefined && error == null)){
+                shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron/releases/latest").then();
             }
         });
 }
 
 function updateStartMenuIcon() {
     if (process.platform==="win32") {
-        const toastActivatorClsid = "849c2549-fe1e-4aa6-bb93-4690993ccb89";
+        const toastActivatorClsid = "eb1fdd5b-8f70-4b5a-b230-998a2dc19303";
 
         const appID = "evolve-electron";
         app.setAppUserModelId(appID);

@@ -19,15 +19,14 @@ const options = {
     nodeGypRebuild: false,
     buildDependenciesFromSource: false,
     files: [
-        "MegaEvolve/**",
         "index.html",
         "ga4mp.js",
         "main.js",
         "preload.js",
-        "snoretoast.exe",
         "electron-prompt/**"
     ],
     extraResources:[
+        "MegaEvolve/**",
         "extensions/**"
     ],
 
