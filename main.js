@@ -7,7 +7,9 @@ const {
     Menu,
     nativeTheme,
     session,
-    crashReporter
+    crashReporter,
+    ipcMain,
+    MessageChannelMain
 } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
@@ -18,7 +20,6 @@ const ga4mp = require("./ga4mp.js");
 const {ElectronChromeExtensions} = require("electron-chrome-extensions");
 const axios = require('axios');
 let notifier = require('node-notifier');
-const {WindowsToaster} = require("node-notifier");
 
 crashReporter.start({ uploadToServer: false });
 const store = new Store();
@@ -31,8 +32,8 @@ if(process.platform==="win32"){
     });
 }
 let megaEvolvePath = path.join(__dirname.split("app.asar")[0], "MegaEvolve");
-let mainWindow,mainWindowID,mainWindowWebContents,tampermonkeyWindow,tampermonkeyWindowOpened=false;
-const createMainWindow = () => {
+let mainWindow,mainWindowID,monitorWindowWebContents,gameWindow,gameWindowWebContents,tampermonkeyWindow,tampermonkeyWindowOpened=false,messageChannelInitiated=false;
+const createWindows = () => {
     mainWindow = new BrowserWindow({
         icon: path.join(megaEvolvePath,'evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico'),
         title: 'evolve-electron by 销锋镝铸',
@@ -43,11 +44,9 @@ const createMainWindow = () => {
         autoHideMenuBar: store.get("mainWindow.autoHideMenuBar") ?? false,
         backgroundColor: nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"#292a2d":"#ffffff",
         webPreferences: {
-            //preload: path.join(__dirname, 'preload.js'),
-            backgroundThrottling: !(store.get("stopBackgroundThrottling")??true),
-            //offscreen: store.get("mainWindow.offscreen")??false,
-            frame: true,
-            titleBarStyle: "default"
+            preload: (store.get("offscreen")??false)?path.join(__dirname,'monitor','monitorPreload.js'):path.join(__dirname, 'gamePreload.js'),
+            backgroundThrottling: (store.get("offscreen")??false)||!(store.get("stopBackgroundThrottling")??true),
+            contextIsolation: true
         }
     });
     updateStartMenuIcon();
@@ -72,22 +71,50 @@ const createMainWindow = () => {
     mainWindow.on('page-title-updated', (event) => {
         event.preventDefault();
     });
+    if(store.get("offscreen")??false) {
+        gameWindow = new BrowserWindow({
+            offscreen: true,
+            show: false,
+            width:0,
+            height:0,
+            webPreferences: {
+                preload: path.join(__dirname, 'gamePreload.js'),
+                backgroundThrottling: !(store.get("stopBackgroundThrottling")??true),
+                contextIsolation: true
+            }
+        });
+        monitorWindowWebContents = mainWindow.webContents;
+        gameWindowWebContents = gameWindow.webContents;
+        gameWindowWebContents.frameRate = 1;
+        gameWindowWebContents.mainFrame.ipc.on('request-worker-channel', (event) => {
+            const { port1, port2 } = new MessageChannelMain();
+            monitorWindowWebContents.postMessage('port', null, [port1]);
+            event.senderFrame.postMessage('port', null, [port2]);
+        });
+    }else{
+        gameWindow = mainWindow;
+        monitorWindowWebContents = null;
+    }
+    setupIpc();
     session.defaultSession.loadExtension(path.join(__dirname.split("app.asar")[0], 'extensions', 'dhdgffkkebhmkfjojejmpbldmpobfkfo'), {allowFileAccess: true}).then(()=>{
         switch(store.get("gameSource")){
             case "inside":
-                mainWindow.loadFile(path.join(megaEvolvePath,'index.html')).then(firstLoadPage);
+                gameWindow.loadFile(path.join(megaEvolvePath,'index.html')).then(firstLoadPage);
                 break;
             case "xiaofengdizhu":
-                mainWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then(firstLoadPage);
+                gameWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then(firstLoadPage);
                 break;
             case "pmotschmann":
-                mainWindow.loadURL("https://pmotschmann.github.io/Evolve/").then(firstLoadPage);
+                gameWindow.loadURL("https://pmotschmann.github.io/Evolve/").then(firstLoadPage);
                 break;
             case "g8hh":
-                mainWindow.loadURL("https://g8hh.github.io/evolve/").then(firstLoadPage);
+                gameWindow.loadURL("https://g8hh.github.io/evolve/").then(firstLoadPage);
                 break;
             default:
-                mainWindow.loadFile(path.join(megaEvolvePath,'index.html')).then(firstLoadPage);
+                gameWindow.loadFile(path.join(megaEvolvePath,'index.html')).then(firstLoadPage);
+        }
+        if(store.get("offscreen")??false){
+            mainWindow.loadFile(path.join(__dirname,"monitor","monitor.html")).then();
         }
     });
 }
@@ -116,6 +143,17 @@ function saveMainWindowInfo() {
             bounds: mainWindow.getNormalBounds(),
             isMaximized: mainWindow.isMaximized() || mainWindow.isFullScreen()
         }
+    });
+}
+
+function setupIpc(){
+    ipcMain.on('log', (event, message) => {
+        if(monitorWindowWebContents){
+            monitorWindowWebContents.send("log",message);
+        }
+    });
+    ipcMain.handle('getGameDays', ()=>{
+
     });
 }
 
@@ -172,10 +210,10 @@ app.whenReady().then(() => {
             win?.destroy()
         }
     });
-    createMainWindow();
+    createWindows();
 
     app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0)createMainWindow();
+        if (BrowserWindow.getAllWindows().length === 0)createWindows();
     })
 })
 
@@ -233,12 +271,15 @@ app.on('web-contents-created', (event, contents) => {
     });
     contents.on('render-process-gone', (event, details) => {
         contents.reload();
-        new Notification({
-            title: "evolve-electron",
-            body: "渲染进程崩溃了，已尝试刷新页面\n错误代码：" + details.exitCode + "；原因：" + details.reason,
-            icon: path.join(megaEvolvePath,'evolved-withBackground.ico'),
-            timeoutType: "default"
-        }).show();
+        notifier.notify({
+            appID: "evolve-electron",
+            title: "错误",
+            message: "渲染进程崩溃了，已尝试刷新页面\n错误代码：" + details.exitCode + "；原因：" + details.reason,
+            icon: path.join(megaEvolvePath,"evolved-withBackground.ico"),
+            sound: false,
+            wait: false,
+            timeout: 5
+        });
     });
 })
 
@@ -257,7 +298,7 @@ function setMainMenu() {
                             checked: (store.get("gameSource")??"inside")==="inside",
                             click() {
                                 store.set("gameSource","inside");
-                                mainWindow.loadFile(path.join(megaEvolvePath,'index.html')).then();
+                                gameWindow.loadFile(path.join(megaEvolvePath,'index.html')).then();
                             }
                         },
                         {
@@ -267,7 +308,7 @@ function setMainMenu() {
                             checked: store.get("gameSource")==="xiaofengdizhu",
                             click() {
                                 store.set("gameSource","xiaofengdizhu");
-                                mainWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then();
+                                gameWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then();
                             }
                         },
                         {
@@ -277,7 +318,7 @@ function setMainMenu() {
                             checked: store.get("gameSource")==="pmotschmann",
                             click() {
                                 store.set("gameSource","pmotschmann");
-                                mainWindow.loadURL("https://pmotschmann.github.io/Evolve/").then();
+                                gameWindow.loadURL("https://pmotschmann.github.io/Evolve/").then();
                             }
                         },
                         {
@@ -287,7 +328,7 @@ function setMainMenu() {
                             checked: store.get("gameSource")==="g8hh",
                             click() {
                                 store.set("gameSource","g8hh");
-                                mainWindow.loadURL("https://g8hh.github.io/evolve/").then();
+                                gameWindow.loadURL("https://g8hh.github.io/evolve/").then();
                             }
                         }
                     ]
@@ -364,10 +405,10 @@ function setMainMenu() {
                     checked: store.get("stopBackgroundThrottling")??true,
                     click() {
                         if(store.get("stopBackgroundThrottling")??true){
-                            mainWindowWebContents.backgroundThrottling = true;
+                            gameWindowWebContents.backgroundThrottling = true;
                             store.set("stopBackgroundThrottling",false);
                         }else{
-                            mainWindowWebContents.backgroundThrottling = false;
+                            gameWindowWebContents.backgroundThrottling = false;
                             store.set("stopBackgroundThrottling",true);
                         }
                     }
@@ -376,14 +417,14 @@ function setMainMenu() {
                     label: "离屏渲染模式",
                     sublabel: "自动重启后生效",
                     type: "checkbox",
-                    checked: store.get("mainWindow.offscreen")??false,
+                    checked: store.get("offscreen")??false,
                     click() {
-                        if(store.get("mainWindow.offscreen")??false){
-                            store.set("mainWindow.offscreen",false);
+                        if(store.get("offscreen")??false){
+                            store.set("offscreen",false);
                             app.relaunch();
                             app.exit();
                         }else{
-                            store.set("mainWindow.offscreen",true);
+                            store.set("offscreen",true);
                             app.relaunch();
                             app.exit();
                         }
@@ -391,7 +432,7 @@ function setMainMenu() {
                 },
                 {
                     label: "禁用硬件加速",
-                    sublabel: "配合离屏渲染模式可加速，自动重启后生效",
+                    sublabel: "配合离屏渲染模式可提速，自动重启后生效",
                     type: "checkbox",
                     checked: store.get("disableHardwareAcceleration")??false,
                     click() {
@@ -409,7 +450,14 @@ function setMainMenu() {
                 {type: 'separator'},
                 {label: "刷新", role: 'reload'},
                 {label: "清除缓存并刷新", role: 'forceReload'},
-                {label: "开发者工具", role: 'toggleDevTools'},
+                {label: "开发者工具",sublabel: "当前窗口", role: 'toggleDevTools'},
+                {
+                    label: "开发者工具",
+                    sublabel: "游戏窗口",
+                    click() {
+                        gameWindowWebContents.openDevTools({mode:"detach"});
+                    }
+                },
                 {type: 'separator'},
                 {label: "重置缩放", role: 'resetZoom'},
                 {label: "放大", role: 'zoomIn'},

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="UTF-8">
+  <title>离屏监视器</title>
+</head>
+<body>
+  <h1>离屏监视器</h1>
+  <div>当前游戏窗口为离屏渲染模式，您导入<a href="https://github.com/XiaofengdiZhu/evolve-electron/blob/main/tampermonkeyScripts/配合离屏模式.js" target="_blank">配合离屏模式</a>脚本后，可以通过以下按钮获取当前游戏状态</div>
+  <div>
+    <button onclick="stopOrContinue()">暂停/继续</button>
+    <button onclick="getGameDays()">获取游戏天数</button>
+  </div>
+  <div>日志：</div>
+  <div id="logs"></div>
+</body>
+<script>
+  let firstLoopPassed = false;
+  let logsCount = 0;
+  let logs = document.getElementById("logs");
+  window.electron.onLog((log) => {
+    if(log.startsWith("上一轮") && !firstLoopPassed){
+      firstLoopPassed = true;
+      return;
+    }
+    let now = new Date();
+    let firstChild = logs.firstChild??null;
+    logs.insertBefore(document.createTextNode(`${now.getHours()}:${now.getMinutes()}:${now.getSeconds()} ${log}`),firstChild);
+    logs.insertBefore(document.createElement("br"),firstChild);
+    if(++logsCount>50){
+      logs.removeChild(logs.lastChild);
+      logs.removeChild(logs.lastChild);
+    }
+  })
+
+  function getGameDays() {
+    window.electron.getGameDays();
+  }
+  function stopOrContinue() {
+    window.electron.stopOrContinue();
+  }
+</script>
+</html>

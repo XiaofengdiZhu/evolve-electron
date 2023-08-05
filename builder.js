@@ -22,7 +22,8 @@ const options = {
         "index.html",
         "ga4mp.js",
         "main.js",
-        "preload.js",
+        "gamePreload.js",
+        "monitor/**",
         "electron-prompt/**"
     ],
     extraResources:[

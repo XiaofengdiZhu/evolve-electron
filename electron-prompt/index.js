@@ -134,7 +134,6 @@ function electronPrompt(options, parentWindow) {
 			cleanup();
 			resolve(null);
 		});
-console.log(path.join(__dirname, 'page', 'prompt.html'));
 		promptWindow.loadFile(
 			path.join(__dirname, 'page', 'prompt.html'),
 			{hash: id},

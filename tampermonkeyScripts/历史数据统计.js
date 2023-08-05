@@ -291,10 +291,16 @@
                 if (oldGlobal.stats.reset > 0) {
                     statsData.total_resets = oldGlobal.stats.reset;
                 }
-
                 if(historyData.length == 0 || (historyData.length > 0 && historyData[0].total_resets != statsData.total_resets)) historyData.unshift(statsData)
                 if(historyData.length > HIST_RESET_LIMIT) historyData.pop()
                 localStorage.setItem("historyData", JSON.stringify(historyData));
+                if(window.electron){
+                	if(historyData[1]&&historyData[1].nextStartTime)
+                    {
+                    	let time = statsData.nextStartTime-historyData[1].nextStartTime;
+                        window.electron.log(`上一轮重置情况：天数：${statsData.game_days_played}，历时：${(time/3600000).toFixed(4)}小时，倍速：${(statsData.game_days_played*5000/time).toFixed(1)}`);
+                    }
+                }
             }
 
 
