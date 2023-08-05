@@ -7,7 +7,7 @@ Because most modern web browsers limit the web games running in the background, 
 因为绝大部分现代浏览器对后台运行网页游戏有限制，所以我决定自己动手解决此问题，选择了[Electron](https://www.electronjs.org/)套壳来提升后台能力。
 
 ## Fetchers 特色
-* Full speed in background.即使在后台也全速运行。
+* Full speed in background, support offscreen rendering mode.即使在后台也全速运行，支持离屏渲染模式。
 * Support multiple game source and provide an inside [speed-up version](https://github.com/XiaofengdiZhu/MegaEvolve).支持多种游戏来源，并提供一个内置加速版本[超进化](https://github.com/XiaofengdiZhu/MegaEvolve)。
 * Support scripts with some limitations.支持脚本（有限制）。
 * Light and dark theme.亮色、暗色主题。

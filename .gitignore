@@ -3,3 +3,4 @@ out
 dist
 .idea
 .yarn
+yarn-error.log

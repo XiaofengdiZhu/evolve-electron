@@ -93,7 +93,7 @@
         }
 
         isUnlocked() {
-            return this.definition.display;
+            return this.definition?this.definition.display:false;
         }
 
         isManaged() {
@@ -227,7 +227,8 @@
         }
 
         isUnlocked() {
-            return game.global.resource[this._originalId].display;
+            let res = game.global.resource[this._originalId];
+            return res?res.display:false;
         }
 
         get servants() {
@@ -4663,7 +4664,7 @@
         },
 
         isMercenaryUnlocked() {
-            return game.global.civic.garrison.mercs;
+            return game.global.civic.garrison?game.global.civic.garrison.mercs:false;
         },
 
         // function mercCost from civics.js
@@ -9084,7 +9085,7 @@
         }
 
         let taxVue = getVueById('tax_rates');
-        if (taxVue === undefined || !game.global.civic.taxes.display) {
+        if (taxVue === undefined || !game.global.civic.taxes || !game.global.civic.taxes.display) {
             return;
         }
 

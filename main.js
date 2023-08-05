@@ -432,7 +432,7 @@ function setMainMenu() {
                 },
                 {
                     label: "禁用硬件加速",
-                    sublabel: "配合离屏渲染模式可提速，自动重启后生效",
+                    sublabel: "自动重启后生效",
                     type: "checkbox",
                     checked: store.get("disableHardwareAcceleration")??false,
                     click() {
@@ -563,7 +563,7 @@ function setMainMenu() {
                     }
                 },
                 {
-                    label: "开启自动更新",
+                    label: "自动检测更新",
                     type: "checkbox",
                     checked: store.get("openAutoUpdate")??true,
                     click() {
@@ -576,7 +576,7 @@ function setMainMenu() {
                 },
                 {type: 'separator'},
                 {
-                    label:"Github",
+                    label:"官网",
                     click(){
                         shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron").then();
                     }

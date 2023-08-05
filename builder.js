@@ -14,7 +14,7 @@ const options = {
     "appId": "xfdz.evolve-electron",
     "copyright": "Copyright © 2023 销锋镝铸",
     // "store” | “normal” | "maximum". - For testing builds, use 'store' to reduce build time significantly.
-    compression: "store",
+    compression: "maximum",
     removePackageScripts: true,
     nodeGypRebuild: false,
     buildDependenciesFromSource: false,
