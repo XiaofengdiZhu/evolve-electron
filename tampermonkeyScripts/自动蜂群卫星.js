@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         自动蜂群卫星
-// @version      1.0 for 超进化 20230716
+// @version      1.0 for 超进化 20230807
 // @author       销锋镝铸
 // @downloadURL  https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/自动蜂群卫星.js
 // @updateURL    https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/Meta/自动蜂群卫星.meta.js
@@ -33,7 +33,10 @@
         building = null;
         if(window.evolve.global.space.swarm_satellite.count>8000){
             clearInterval(intervalId);
-            console.log("已建造8000个以上蜂群卫星")
+            console.log("已建造8000个以上蜂群卫星");
+            if(window.electron){
+                window.electron.log("已建造8000个以上蜂群卫星");
+            }
         }
     }, 5000);
 })();

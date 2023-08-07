@@ -168,9 +168,6 @@ app.setAboutPanelOptions({
     website:"https://github.com/XiaofengdiZhu/evolve-electron"
 });
 app.enableSandbox();
-if(store.get("disableHardwareAcceleration")??false){
-    app.disableHardwareAcceleration();
-}
 let powerSaveBlockerID = null;
 app.whenReady().then(() => {
     if(store.get("powerSaveBlocker")??true){
@@ -286,55 +283,48 @@ app.on('web-contents-created', (event, contents) => {
 function setMainMenu() {
     const template = [
         {
-            label: '文件',
+            label: '选择版本',
             submenu: [
                 {
-                    label: "选择版本",
-                    submenu: [
-                        {
-                            label: "离线超进化版 from 销锋镝铸",
-                            sublabel: "无需网络",
-                            type: "radio",
-                            checked: (store.get("gameSource")??"inside")==="inside",
-                            click() {
-                                store.set("gameSource","inside");
-                                gameWindow.loadFile(path.join(megaEvolvePath,'index.html')).then();
-                            }
-                        },
-                        {
-                            label: "在线超进化版 from 销锋镝铸",
-                            sublabel: "https://xiaofengdizhu.github.io/MegaEvolve/",
-                            type: "radio",
-                            checked: store.get("gameSource")==="xiaofengdizhu",
-                            click() {
-                                store.set("gameSource","xiaofengdizhu");
-                                gameWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then();
-                            }
-                        },
-                        {
-                            label: "在线原版 by pmotschmann",
-                            sublabel: "https://pmotschmann.github.io/Evolve/",
-                            type: "radio",
-                            checked: store.get("gameSource")==="pmotschmann",
-                            click() {
-                                store.set("gameSource","pmotschmann");
-                                gameWindow.loadURL("https://pmotschmann.github.io/Evolve/").then();
-                            }
-                        },
-                        {
-                            label: "在线锅巴汉化版 from g8hh",
-                            sublabel: "https://g8hh.github.io/evolve/",
-                            type: "radio",
-                            checked: store.get("gameSource")==="g8hh",
-                            click() {
-                                store.set("gameSource","g8hh");
-                                gameWindow.loadURL("https://g8hh.github.io/evolve/").then();
-                            }
-                        }
-                    ]
+                    label: "离线超进化版 from 销锋镝铸",
+                    sublabel: "无需网络",
+                    type: "radio",
+                    checked: (store.get("gameSource")??"inside")==="inside",
+                    click() {
+                        store.set("gameSource","inside");
+                        gameWindow.loadFile(path.join(megaEvolvePath,'index.html')).then();
+                    }
                 },
-                {label: "关于", role: 'about'},
-                {label: "退出", role: 'quit'}
+                {
+                    label: "在线超进化版 from 销锋镝铸",
+                    sublabel: "https://xiaofengdizhu.github.io/MegaEvolve/",
+                    type: "radio",
+                    checked: store.get("gameSource")==="xiaofengdizhu",
+                    click() {
+                        store.set("gameSource","xiaofengdizhu");
+                        gameWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then();
+                    }
+                },
+                {
+                    label: "在线原版 by pmotschmann",
+                    sublabel: "https://pmotschmann.github.io/Evolve/",
+                    type: "radio",
+                    checked: store.get("gameSource")==="pmotschmann",
+                    click() {
+                        store.set("gameSource","pmotschmann");
+                        gameWindow.loadURL("https://pmotschmann.github.io/Evolve/").then();
+                    }
+                },
+                {
+                    label: "在线锅巴汉化版 from g8hh",
+                    sublabel: "https://g8hh.github.io/evolve/",
+                    type: "radio",
+                    checked: store.get("gameSource")==="g8hh",
+                    click() {
+                        store.set("gameSource","g8hh");
+                        gameWindow.loadURL("https://g8hh.github.io/evolve/").then();
+                    }
+                }
             ]
         },
         {
@@ -384,6 +374,34 @@ function setMainMenu() {
                         }
                     ]
                 },
+                {
+                    label: "隐藏/显示菜单栏",
+                    click() {
+                        let focusedWindow = BrowserWindow.getFocusedWindow();
+                        if(focusedWindow.autoHideMenuBar){
+                            if(focusedWindow.id===mainWindowID){
+                                store.set("mainWindow.autoHideMenuBar", false);
+                            }
+                            focusedWindow.menuBarVisible = true;
+                            focusedWindow.autoHideMenuBar = false;
+                        }else{
+                            if(focusedWindow.id===mainWindowID){
+                                store.set("mainWindow.autoHideMenuBar", true);
+                            }
+                            focusedWindow.menuBarVisible = false;
+                            focusedWindow.autoHideMenuBar = true;
+                            notifier.notify({
+                                appID: "evolve-electron",
+                                title: "提示",
+                                message: "按键盘上的Alt显示菜单栏",
+                                icon: path.join(megaEvolvePath,"evolved-withBackground.ico"),
+                                sound: false,
+                                wait: false,
+                                timeout: 5
+                            });
+                        }
+                    }
+                },
                 {type: 'separator'},
                 {
                     label: "保持系统活动状态",
@@ -429,25 +447,11 @@ function setMainMenu() {
                             app.exit();
                         }
                     }
-                },
-                {
-                    label: "禁用硬件加速",
-                    sublabel: "自动重启后生效",
-                    type: "checkbox",
-                    checked: store.get("disableHardwareAcceleration")??false,
-                    click() {
-                        if(store.get("disableHardwareAcceleration")??false){
-                            store.set("disableHardwareAcceleration",false);
-                            app.relaunch();
-                            app.exit();
-                        }else{
-                            store.set("disableHardwareAcceleration",true);
-                            app.relaunch();
-                            app.exit();
-                        }
-                    }
-                },
-                {type: 'separator'},
+                }
+            ]
+        },{
+            label: "页面",
+            submenu: [
                 {label: "刷新", role: 'reload'},
                 {label: "清除缓存并刷新", role: 'forceReload'},
                 {label: "开发者工具",sublabel: "当前窗口", role: 'toggleDevTools'},
@@ -463,34 +467,6 @@ function setMainMenu() {
                 {label: "放大", role: 'zoomIn'},
                 {label: "缩小", role: 'zoomOut'},
                 {label: "全屏", role: 'togglefullscreen'},
-                {
-                    label: "隐藏/显示菜单栏",
-                    click() {
-                        let focusedWindow = BrowserWindow.getFocusedWindow();
-                        if(focusedWindow.autoHideMenuBar){
-                            if(focusedWindow.id===mainWindowID){
-                                store.set("mainWindow.autoHideMenuBar", false);
-                            }
-                            focusedWindow.menuBarVisible = true;
-                            focusedWindow.autoHideMenuBar = false;
-                        }else{
-                            if(focusedWindow.id===mainWindowID){
-                                store.set("mainWindow.autoHideMenuBar", true);
-                            }
-                            focusedWindow.menuBarVisible = false;
-                            focusedWindow.autoHideMenuBar = true;
-                            notifier.notify({
-                                appID: "evolve-electron",
-                                title: "提示",
-                                message: "按键盘上的Alt显示菜单栏",
-                                icon: path.join(megaEvolvePath,"evolved-withBackground.ico"),
-                                sound: false,
-                                wait: false,
-                                timeout: 5
-                            });
-                        }
-                    }
-                },
                 {type: 'separator'},
                 {
                     label: "页面内搜索",

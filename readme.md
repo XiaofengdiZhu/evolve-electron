@@ -9,7 +9,7 @@ Because most modern web browsers limit the web games running in the background, 
 ## Fetchers 特色
 * Full speed in background, support offscreen rendering mode.即使在后台也全速运行，支持离屏渲染模式。
 * Support multiple game source and provide an inside [speed-up version](https://github.com/XiaofengdiZhu/MegaEvolve).支持多种游戏来源，并提供一个内置加速版本[超进化](https://github.com/XiaofengdiZhu/MegaEvolve)。
-* Support scripts with some limitations.支持脚本（有限制）。
+* Support scripts with some limitations(No online update、no support for `require`).有限支持的脚本功能（不能在线更新、不支持`require`）。
 * Light and dark theme.亮色、暗色主题。
 ## Download 下载
 [Click here 点我](https://github.com/XiaofengdiZhu/evolve-electron/releases)

@@ -6,14 +6,30 @@
 </head>
 <body>
   <h1>离屏监视器</h1>
-  <div>当前游戏窗口为离屏渲染模式，您导入<a href="https://github.com/XiaofengdiZhu/evolve-electron/blob/main/tampermonkeyScripts/配合离屏模式.js" target="_blank">配合离屏模式</a>脚本后，可以通过以下按钮获取当前游戏状态</div>
+  <div>当前游戏窗口为离屏渲染模式，您导入<a href="https://github.com/XiaofengdiZhu/evolve-electron/blob/main/tampermonkeyScripts/配合离屏模式.js" target="_blank">配合离屏模式</a>脚本后，可以通过以下按钮操作游戏或获取当前状态进度</div>
   <div>
     <button onclick="stopOrContinue()">暂停/继续</button>
     <button onclick="getGameDays()">获取游戏天数</button>
   </div>
-  <div>日志：</div>
-  <div id="logs"></div>
+  <div>
+    <table style="border: none">
+      <thead>
+      <tr>
+        <th>时间</th>
+        <th style="text-align: left">日志</th>
+      </tr>
+      </thead>
+      <tbody id="logs">
+      </tbody>
+    </table>
+  </div>
 </body>
+<style>
+  th,td{
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+  }
+</style>
 <script>
   let firstLoopPassed = false;
   let logsCount = 0;
@@ -25,10 +41,18 @@
     }
     let now = new Date();
     let firstChild = logs.firstChild??null;
-    logs.insertBefore(document.createTextNode(`${now.getHours()}:${now.getMinutes()}:${now.getSeconds()} ${log}`),firstChild);
-    logs.insertBefore(document.createElement("br"),firstChild);
+    let hours = now.getHours();
+    let minutes = now.getMinutes();
+    let seconds = now.getSeconds();
+    let tr = document.createElement("tr");
+    let timeTd = document.createElement("td");
+    timeTd.innerText=`${hours<10?"0"+hours:hours}:${minutes<10?"0"+minutes:minutes}:${seconds<10?"0"+seconds:seconds}`;
+    let logTd = document.createElement("td");
+    logTd.innerText = log;
+    tr.appendChild(timeTd);
+    tr.appendChild(logTd);
+    logs.insertBefore(tr,firstChild);
     if(++logsCount>50){
-      logs.removeChild(logs.lastChild);
       logs.removeChild(logs.lastChild);
     }
   })

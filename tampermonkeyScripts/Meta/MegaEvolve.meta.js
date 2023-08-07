@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MegaEvolve
 // @namespace    http://tampermonkey.net/
-// @version      3.3.1.108.28 for 超进化 20230716
+// @version      3.3.1.108.28 for 超进化 20230805
 // @description  try to take over the world!
 // @downloadURL  https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/MegaEvolve.js
 // @updateURL    https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/Meta/MegaEvolve.meta.js
