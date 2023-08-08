@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MegaEvolve
 // @namespace    http://tampermonkey.net/
-// @version      3.3.1.108.28 for 超进化 20230805
+// @version      3.3.1.108.29 for 超进化 20230808
 // @description  try to take over the world!
 // @downloadURL  https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/MegaEvolve.js
 // @updateURL    https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/Meta/MegaEvolve.meta.js
@@ -235,7 +235,7 @@
             return game.global.race.servants?.sjobs[this._originalId] ?? 0;
         }
         get workers() {
-            return game.global.city.foundry[this._originalId];
+            return game.global.city.foundry?.[this._originalId]??0;
         }
 
         get max() {
@@ -1970,7 +1970,7 @@
     ];
     const governors = ["soldier", "criminal", "entrepreneur", "educator", "spiritual", "bluecollar", "noble", "media", "sports", "bureaucrat"];
     const evolutionSettingsToStore = ["userEvolutionTarget", "prestigeType", ...challenges.map(c => "challenge_" + c[0].id)];
-    const prestigeNames = {mad: "核爆重置", bioseed: "播种重置", cataclysm: "大灾变重置", vacuum: "真空坍缩", whitehole: "黑洞重置", apocalypse: "人工智能觉醒", ascension: "飞升重置", witch_ascension: "巫术飞升", demonic: "恶魔灌注", terraform: "星球重塑重置", matrix: "矩阵重置", retire: "隐退重置", eden: "伊甸园重置"};
+    const prestigeNames = {mad: "核爆重置", bioseed: "播种重置", cataclysm: "大灾变重置", vacuum: "真空坍缩", whitehole: "黑洞重置", apocalypse: "人工智能觉醒", ascension: "飞升重置", witch_ascension: "巫术飞升", witch_ascension: "巫术飞升", demonic: "恶魔灌注", terraform: "星球重塑重置", matrix: "矩阵重置", retire: "隐退重置", eden: "伊甸园重置"};
     const logIgnore = ["food", "lumber", "stone", "chrysotile", "slaughter", "s_alter", "slave_market", "horseshoe", "assembly", "cloning_facility"];
     const galaxyRegions = ["gxy_stargate", "gxy_gateway", "gxy_gorddon", "gxy_alien1", "gxy_alien2", "gxy_chthonian"];
     const settingsSections = ["toggle", "general", "prestige", "evolution", "research", "market", "storage", "production", "war", "hell", "fleet", "job", "building", "project", "government", "logging", "trait", "weighting", "ejector", "planet", "mech", "magic"];
@@ -3073,6 +3073,11 @@
           (building) => building._tab === "city" || building._tab === "space" || building._tab === "starDock",
           () => "太阳系建筑",
           () => settings.buildingWeightingSolar
+      ],[
+          () => haveTech("ascension", 4),
+          (building) => building._tab === "city" || building._tab === "space"  || building._tab === "portal",
+          () => "非飞升建筑",
+          () => settings.buildingWeightingAfterAsc
     ]];
 
     // Singleton manager objects
@@ -6826,7 +6831,9 @@
             prioritizeOuterFleet: "ignore",
             buildingAlwaysClick: false,
             buildingClickPerTick: 50,
-            activeTargetsUI: false
+            activeTargetsUI: false,
+            autoReloadServants: false,
+            autoReloadPlague: false,
         }
 
         applySettings(def, reset);
@@ -7137,6 +7144,7 @@
             buildingWeightingSolar: 0.2,
             buildingWeightingOverlord: 0,
             buildingWeightingAfterLake: 1,
+            buildingWeightingAfterAsc: 1,
         }
 
         applySettings(def, reset);
@@ -7277,6 +7285,7 @@
             productionFactoryMinIngredients: 0,
             replicatorResource: 'Stone',
             replicatorAssignGovernorTask: true,
+            replicatorPowerBuffer: 10,
             replicatorAccordingBuildingWeight: false
         }
 
@@ -8188,6 +8197,29 @@
         }
     }
 
+    function autoReload() {
+
+        let servants = (()=>{try{return evolve.global.race.servants.used}catch(e){return 0}})();
+        //console.log(servants())
+        //console.log(servants)
+        if(isNaN(servants) && settings.autoReloadServants){
+            //console.log("NaN出现，30秒后刷新")
+            setTimeout(()=>{window.location.reload();}, 30000);
+        }
+
+        let plague = (()=>{try{return evolve.global.tech.plague}catch(e){return 0}})();
+        let disease = (()=>{try{return evolve.global.tech.disease}catch(e){return 0}})();
+        if (plague >= 2 && settings.autoReloadPlague){
+            if (document.querySelector("#tech-infectious_disease_lab") != null || disease >= 1){
+                return;
+            }
+            else {
+                //console.log("实验室未出现，30秒后刷新")
+                setTimeout(()=>{window.location.reload();}, 30000);
+            }
+        }
+    }
+
     function autoSpy() {
         let m = SpyManager;
         if (!m._foreignVue || haveTask("spyop") || !haveTech("spy")) {
@@ -8653,7 +8685,7 @@
         let minerIndex = jobList.indexOf(jobs.Miner);
 
         // Make sure our hooved have miner for horseshoes\assemble
-        if ((hoovedMiner || synthMiner) && !minersDisabled && availableWorkers > 1 && minerIndex !== -1) {
+        if ((hoovedMiner || synthMiner) && !minersDisabled && availableWorkers > 1 && minerIndex !== -1 && jobs.Miner.isSmartEnabled) {
             requiredWorkers[minerIndex] = 1;
             availableWorkers--;
         }
@@ -9166,7 +9198,7 @@
                 totalWeigthing += m.resWeighting(res.id);
                 currentTransmute += m.currentCount(res.id);
             }
-            let manaAvailable = (currentTransmute + resources.Mana.rateOfChange) * settings.magicAlchemyManaUse;
+            let manaAvailable = (currentTransmute + resources.Mana.rateOfChange) * ((!settings.autoPylon && resources.Mana.storageRatio > 0.99) ? 1 : settings.magicAlchemyManaUse);
             let crystalAvailable = currentTransmute * 0.15 + resources.Crystal.currentQuantity + resources.Crystal.rateOfChange;
             let maxTransmute = Math.floor(Math.min(manaAvailable, crystalAvailable * (1/0.15)));
             activeList.forEach(res => adjustAlchemy[res.id] += Math.floor(maxTransmute * (m.resWeighting(res.id) / totalWeigthing)));
@@ -9815,13 +9847,19 @@
             //ReplicatorManager.setResource(selectedResource.id);
             var tarRes = selectedResource.id;
         }
+        let myReplicableResources = [];
+        for (let i = 0; i < priorityList.length; i++) {
+            for (let j = 0; j < priorityList[i].length; j++) {
+                myReplicableResources.push(priorityList[i][j].id);
+            }
+        }
         let buildingList = [...BuildingManager.managedPriorityList(), ...ProjectManager.managedPriorityList()].sort((a, b) => b.weighting - a.weighting);
         if (settings.replicatorAccordingBuildingWeight && state.triggerTargets.length == 0 && buildingList.length > 0){
-            for (let i = Math.min(2, buildingList.length - 1); i >= 0; i--) {
+            for (let i = Math.min(5, buildingList.length - 1); i >= 0; i--) {
                 let tarBuilding = buildingList[i];
                 let thisTime = 0, tarTime = 0;
                 for (let tarBuildRes in tarBuilding.cost) {
-                    if (replicableResources.includes(tarBuildRes) && game.global.resource[tarBuildRes].amount < tarBuilding.cost[tarBuildRes]) {
+                    if (myReplicableResources.includes(tarBuildRes) && game.global.resource[tarBuildRes].amount < tarBuilding.cost[tarBuildRes]) {
                         thisTime = (tarBuilding.cost[tarBuildRes] - game.global.resource[tarBuildRes].amount) / game.global.resource[tarBuildRes].diff;
                         if (thisTime > tarTime && ReplicatorManager._industryVue.avail(tarBuildRes) == true) {
                             tarTime = thisTime;
@@ -9831,7 +9869,12 @@
                 }
             }
         }
-        ReplicatorManager.setResource(tarRes);
+        try {
+            ReplicatorManager.setResource(tarRes);
+        }
+        catch(e) {
+            console.log(tarRes);
+        }
 
 
         // Enable matter replicator task
@@ -9859,26 +9902,26 @@
             govOffice.setTask('replicate', replicatorTaskIndex);
         }
         let inputEvent = new Event('input');
-        if (game.global.race.governor.config.replicate.pow.cap != 2000000) {
+        if (game.global.race.governor.config.replicate.pow.cap != 3000000) {
             if(govOffice.setReplicatePowCap){
-                govOffice.setReplicatePowCap(2000000);
+                govOffice.setReplicatePowCap(3000000);
             }else{
             let repConfigPowCap = document.querySelectorAll(".tConfig")[8].querySelectorAll(".storage")[0].querySelectorAll(".b-numberinput input")[0];
-            repConfigPowCap.value = 2000000; //设置“至多使用电力”
+            repConfigPowCap.value = 3000000; //设置“至多使用电力”
             repConfigPowCap.dispatchEvent(inputEvent);
             }
         }
-        let powerBuffer = 5;
+        let powerBuffer = settings.replicatorPowerBuffer;
         for (let unlockedBuilding of buildingList) {
             if (unlockedBuilding.powered > powerBuffer) {
                 powerBuffer = unlockedBuilding.powered;
             }
         }
         if(govOffice.setReplicatePowBuffer){
-            govOffice.setReplicatePowCap(Math.ceil(powerBuffer * 3));
+            govOffice.setReplicatePowBuffer(powerBuffer);
         }else{
             let repConfigPowBuffer = document.querySelectorAll(".tConfig")[8].querySelectorAll(".storage")[0].querySelectorAll(".b-numberinput input")[1];
-            repConfigPowBuffer.value = Math.ceil(powerBuffer * 3); //设置“可用电力缓冲值”，为可建造建筑最大耗电量的3倍（倍率可自行修改）
+            //repConfigPowBuffer.value = Math.ceil(powerBuffer * 3); //设置“可用电力缓冲值”，为可建造建筑最大耗电量的3倍（倍率可自行修改）
             repConfigPowBuffer.dispatchEvent(inputEvent);
         }
         if (game.global.race.governor.config.replicate.pow.on == false) {
@@ -10675,6 +10718,13 @@
     function resetAutoFire(reset) {
         let def = {
             autoFire: false,
+        }
+        applySettings(def, reset);
+    }
+
+    function resetAutoReload(reset) {
+        let def = {
+            autoReload: false,
         }
         applySettings(def, reset);
     }
@@ -13132,7 +13182,7 @@
                     if (!checkCompare[check.cmp](var1, var2)) {
                         continue;
                     }
-                    let ret = checkCustom[check.cmp] ? var2 : conditions[i].ret;
+                    let ret = checkCustom[check.cmp] ? var2 : check.ret;
 
                     if (typeof settingsRaw[key] === typeof ret) {
                         // Override single value
@@ -13143,7 +13193,7 @@
                         xorLists[key] = xorLists[key] ?? [];
                         xorLists[key].push(ret);
                     } else {
-                        throw `Expected type: ${typeof settingsRaw[key]}; Override type: ${typeof check.ret}`;
+                        throw `Expected type: ${typeof settingsRaw[key]}; Override type: ${typeof ret}`;
                     }
                 } catch (error) {
                     let msg = `Condition ${i+1} for setting ${key} invalid! Fix or remove it. (${error})`;
@@ -13302,6 +13352,9 @@
         if (settings.autoFire) {
             autoFire();
         }
+        if (settings.autoReload) {
+            autoReload();
+        }
         if (settings.autoFleet) {
             if (game.global.race['truepath']) {
                 autoFleetOuter();
@@ -13449,6 +13502,7 @@
                 "Pit Absorption Chamber (Witch Hunting)":"灵魂之间 (猎巫)",
                 "Hell Space Casino":"赌场 (水星)",
                 "Sun Jump Gate":"空间跳跃门（太阳系）",
+                "Tau Assembly":"装配工厂（天仓五）",
                 '':'',
                 '':'',
                 '':'',
@@ -14869,6 +14923,9 @@
         addSettingsHeader1(currentNode, "附加界面");
         addSettingsToggle(currentNode, "activeTargetsUI", "显示详细的队列", "在右侧追加界面，可以显示当前激活的建筑队列，研究队列，触发器以及它们相应的资源。", buildActiveTargetsUI, removeActiveTargetsUI);
 
+        addSettingsHeader1(currentNode, "自动刷新");
+        addSettingsToggle(currentNode, 'autoReloadServants', '鼬仆NAN自动刷新页面', '当鼬仆出现时自动刷新页面');
+        addSettingsToggle(currentNode, 'autoReloadPlague', '疫病实验室/恶意代码实验室自动刷新页面', '当疫病达到第二阶段却不出现实验室时自动刷新页面');
         document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
 
@@ -14912,15 +14969,15 @@
                 } else if (this.value === "bioseed" && isBioseederPrestigeAvailable()) {
                     confirmationText = "生命播种飞船已经就绪。";
                 } else if (this.value === "cataclysm" && isCataclysmPrestigeAvailable()) {
-                    confirmationText = "把刻度盘拨到11已经可以研究了。";
+                    confirmationText = "把刻度盘拨到11已解锁。";
                 } else if (this.value === "whitehole" && isWhiteholePrestigeAvailable()) {
-                    confirmationText = "奇异灌输已经可以研究了。";
+                    confirmationText = "奇异灌输已解锁。";
                 } else if (this.value === "apocalypse" && isApocalypsePrestigeAvailable()) {
-                    confirmationText = "66号协议已经可以研究了。";
+                    confirmationText = "66号协议已解锁。";
                 } else if (this.value === "ascension" && (game.global.race['witch_hunter'] ? isWitchAscensionPrestigeAvailable() : isAscensionPrestigeAvailable())) {
                     confirmationText = (game.global.race['witch_hunter'] ? "灵魂之间已经建造并供能。" : "飞升装置已经建造并供能。");
                 } else if (this.value === "demonic" && (game.global.race['witch_hunter'] ? isWitchAscensionPrestigeAvailable(true) : isDemonicPrestigeAvailable())) {
-                    confirmationText = (game.global.race['witch_hunter'] ? "灵魂之间已经建造并供能。" : "已经到达了设定的楼层，且已击杀恶魔领主。");
+                    confirmationText = (game.global.race['witch_hunter'] ? "灵魂之间已经建造并供能。" : "已经到达设定的楼层，且已击杀恶魔领主。");
                 } else if (this.value === "terraform" && buildings.RedTerraform.isUnlocked()) {
                     confirmationText = "大气重塑器已经建造并供能。";
                 } else if (this.value === "matrix" && buildings.TauStarBluePill.isUnlocked()) {
@@ -14931,7 +14988,7 @@
                     confirmationText = "点火装置已经建造并就绪。";
                 } else if (this.value === "eden" && buildings.TauStarEden.isUnlocked()
                                                  && buildings.TauStarEden.isAffordable()) {
-                    confirmationText = "已经可以建造伊甸园了。";
+                    confirmationText = "伊甸园已经就绪。";
                 }
                 if (confirmationText !== "") {
                     confirmationText += "选择此项后可能会立刻进行威望重置。您确定要这么做吗？";
@@ -15933,9 +15990,9 @@
         addSettingsNumber(currentNode, "fleetEmbassyKnowledge", "建造大使馆的知识阈值", "建造大使馆后，海盗的活动会更加剧烈，因此脚本只会在到达相应数值的知识上限时进行建造。");
         addSettingsNumber(currentNode, "fleetAlienGiftKnowledge", "研究外星礼物的知识阈值", "研究外星礼物后，海盗的活动会更加剧烈，因此脚本只会在到达相应数值的知识上限时进行研究。");
         addSettingsNumber(currentNode, "fleetAlien2Knowledge", "进行第五星系任务的知识阈值", "进行第五星系任务后，海盗的活动会更加剧烈，因此脚本只会在到达相应数值的知识上限时进行研究。另外，除非您能够无损伤地完成任务，否则脚本也不会自动进行此任务。");
-        let alien2AssaultOptions = [{val: "none", label: "无损失", hint: "最小总战力为650。无损失"},
-                              {val: "suicide", label: "自杀式任务", hint: "当战力评级达到400时进行进攻。会造成损失"}];
-        addSettingsSelect(currentNode, "fleetAlien2Loses", "第五星系任务", "当达到设置条件时发起进攻。应维持在默认设置, 除非您在进行速刷，能够在承担损失的同时快速完成游戏", alien2AssaultOptions);
+        let alien2AssaultOptions = [{val: "none", label: "无损失", hint: "最小战力评价战力为650。不会造成舰队损失。"},
+                              {val: "suicide", label: "自杀式任务", hint: "当战力评级达到400时发起进攻。会对舰队造成损失。"}];
+        addSettingsSelect(currentNode, "fleetAlien2Loses", "第五星系任务", "当达到设置条件时发起进攻。应维持在默认设置, 除非您在进行速刷，能够在承担损失的同时快速完成游戏。", alien2AssaultOptions);
 
         let assaultOptions = [{val: "ignore", label: "不自动进行", hint: "不会自动进行幽冥星系任务"},
                               {val: "high", label: "严重损失", hint: "使用混合舰队进行幽冥星系任务，损失极大(1250以上总战力，损失500左右战力的舰队)"},
@@ -16492,7 +16549,7 @@
                 label: "忽略",
                 hint: "不仿制种族。重要提示：如果不选择任何种族，脚本将卡在进化阶段"
             },
-            ...Object.values(races)           
+            ...Object.values(races)
                 .map(race => {
                 const label = game.global.stats.synth[race.id] ? race.name : `--${race.name}--`
                 return {
@@ -16524,7 +16581,7 @@
                                ...["boost", "murder", "assault", "profit", "stun", "mind_break"].map(p =>
                                ({val: p, label: game.loc(`psychic_${p}_title`), hint: game.loc(`psychic_${p}_desc`)}))];
         addSettingsSelect(currentNode, "psychicPower", "灵能能量", "将选中的能力激活并赋能。 如有需要，将会自动使用10次灵能谋杀以研究高等能量。", psychicOptions);
-        let psychicBoost = [{val: "auto", label: "由脚本管理", hint: "自动选择未达到上限、且在加速后拥有最高收入的资源。"},
+        let psychicBoost = [{val: "auto", label: "由脚本管理", hint: "自动选择未达到上限、且在加速后拥有最高收入的资源进行赋能。"},
                              ...Object.values(resources).filter(r => r.atomicMass > 0).map(r => ({val: r.id, label: r.title}))];
         addSettingsSelect(currentNode, "psychicBoostRes", "加速资源", "通过灵能能量加速资源产出", psychicBoost);
         addSettingsToggle(currentNode, "jobScalePop", "拥有人口众多特质时自动工作倍率提升", "自动工作将自动将相应阈值乘以该倍率，以匹配人口数量");
@@ -16990,6 +17047,7 @@
         addStandardHeading(currentNode, "复制器");
 
         addSettingsToggle(currentNode, 'replicatorAssignGovernorTask', '分配总督任务', '启用后将自动把总督任务设置为调度复制器，自动调节使用的电力。');
+        addSettingsNumber(currentNode, "replicatorPowerBuffer", "电量缓冲", "物质复制器的最低电量缓冲值(此为最低基础值，真实值为基础值*3)");
         addSettingsToggle(currentNode, 'replicatorAccordingBuildingWeight', '根据建筑权重', '启用后将根据建筑权重，生产高权重建筑需要的资源，忽略下方设置。');
 
         currentNode.append(`
@@ -17251,6 +17309,7 @@
         addWeightingRule(tableBodyNode, "智械黎明", "到达天仓五之后的太阳系建筑", "buildingWeightingSolar");
         addWeightingRule(tableBodyNode, "众鼬任务", "与主宰成就冲突的接触众鼬选项", "buildingWeightingOverlord");
         addWeightingRule(tableBodyNode, "血湖后建筑权重", "到达血湖之后的地面、星系、星际建筑", "buildingWeightingAfterLake");
+        addWeightingRule(tableBodyNode, "非飞升建筑权重", "研究飞升后的地面、太空和地狱建筑", "buildingWeightingAfterAsc");
 
         document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
@@ -17865,6 +17924,7 @@
             createSettingToggle(togglesNode, 'autoSupply', '自动补给', '将多余的资源用于补给。普通资源将在接近上限时用于补给，锻造物将在超过需求时用于补给。优先级高于质量喷射器。', createSupplyToggles, removeSupplyToggles);
             createSettingToggle(togglesNode, 'autoNanite', '自动纳米体', '将资源转化为纳米体。普通资源将在接近上限时用于转化，锻造物将在超过需求时用于转化。优先级高于补给和质量喷射器。');
             createSettingToggle(togglesNode, 'autoReplicator', '自动复制器', '将多余的电力用于复制资源。');
+            createSettingToggle(togglesNode, 'autoReload', '自动刷新', '当有需要时自动刷新页面。');
 
             createQuickOptions(togglesNode, "s-quick-prestige-options", "威望重置", buildPrestigeSettings);
 
@@ -18291,7 +18351,7 @@
 
     // main.js -> Soldier Healing
     function getHealingRate() {
-        let hc = 
+        let hc =
           (game.global.race['orbit_decayed'] && game.global.race['truepath']) ? buildings.EnceladusBase.stateOnCount :
           game.global.race['artifical'] ? buildings.BootCamp.count :
           buildings.Hospital.count;
@@ -18603,5 +18663,5 @@
     };
 
     $().ready(mainAutoEvolveScript);
+    console.log("脚本已载入：Evolve 3.3.1.108.28 for 超进化");
 })($);
-console.log("脚本已载入：Evolve 3.3.1.108.28 for 超进化");
