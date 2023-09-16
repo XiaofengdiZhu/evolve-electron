@@ -15,16 +15,20 @@ Because most modern web browsers limit the web games running in the background, 
 [Click here 点我](https://github.com/XiaofengdiZhu/evolve-electron/releases)
 ## Scripts 脚本
 This feature is supported by [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) 这个功能由[篡改猴](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)提供支持
-How to use 如何使用  
+### How to use 如何使用**
 Click `脚本` button on the menubar, click `脚本设置` button, set the `Language` option to your language, click `Installed Userscripts` and add scripts.
 点击菜单栏的`脚本`按钮, 点击`脚本设置按钮`按钮，设置`Language`选项为你的语言，点击`已安装的脚本`并添加脚本。
-> **Attention 注意**  
-> You can get scripts for MegaEvolve from here:
-> 请从下面链接获取适配超进化的脚本：  
-> https://github.com/XiaofengdiZhu/evolve-electron/tree/main/tampermonkeyScripts
+### Attention 注意**
+ You can get scripts for MegaEvolve from here:
+ 请从下面链接获取适配超进化的脚本：  
+[https://github.com/XiaofengdiZhu/evolve-electron/tree/main/tampermonkeyScripts](https://github.com/XiaofengdiZhu/evolve-electron/tree/main/tampermonkeyScripts)
 
 ## Screenshot 截图
 ![screenshot 截图](screenshot.png)
+
+## Discussion 讨论
+* [Github Discussion](https://github.com/XiaofengdiZhu/evolve-electron/discussions)
+* [QQ群 810936955](https://qm.qq.com/cgi-bin/qm/qr?k=YFLeKtRHn6KXKzFyN5IlbzV-EdgxclYE&jump_from=webapi&authKey=ecimWfpnGtzGQBQaDjbx9REB+BJco3/gzc992vsvscYkDUW1kYlAYOeOUTmx2jzf)
 
 ## Build Commands 构建命令
 1. Install dependencies. 安装依赖。

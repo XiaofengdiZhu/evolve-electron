@@ -558,6 +558,12 @@ function setMainMenu() {
                     }
                 },
                 {
+                    label:"QQ群810936955",
+                    click(){
+                        shell.openExternal("https://qm.qq.com/cgi-bin/qm/qr?k=YFLeKtRHn6KXKzFyN5IlbzV-EdgxclYE&jump_from=webapi&authKey=ecimWfpnGtzGQBQaDjbx9REB+BJco3/gzc992vsvscYkDUW1kYlAYOeOUTmx2jzf").then();
+                    }
+                },
+                {
                     label: "软件信息",
                     role: 'about'
                 }

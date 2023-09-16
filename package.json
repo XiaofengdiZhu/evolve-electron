@@ -1,6 +1,6 @@
 {
   "name": "evolve-electron",
-  "version": "v1.3.0",
+  "version": "v1.3.1",
   "description": "an Electron app that you can play Evolve in it.一个用于玩Evolve的Electron套壳软件",
   "homepage": "https://github.com/XiaofengdiZhu/evolve-electron",
   "main": "main.js",
@@ -15,18 +15,18 @@
     "url": "https://github.com/XiaofengdiZhu/evolve-electron.git"
   },
   "devDependencies": {
-    "@electron-forge/cli": "^6.1.1",
-    "electron": "^25.3.0",
-    "electron-builder": "24.6.3"
+    "@electron-forge/cli": "^6.4.2",
+    "electron": "^26.2.1",
+    "electron-builder": "24.6.4"
   },
   "dependencies": {
-    "@electron/fuses": "^1.6.1",
-    "axios": "^1.4.0",
+    "@electron/fuses": "^1.6.2",
+    "axios": "^1.5.0",
     "electron-chrome-extensions": "^3.10.1",
     "electron-log": "^4.4.8",
     "electron-store": "^8.1.0",
     "ga4-mp": "^1.0.3",
     "node-notifier": "^10.0.1",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.1"
   }
 }

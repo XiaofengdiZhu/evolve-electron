@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MegaEvolve
 // @namespace    http://tampermonkey.net/
-// @version      3.3.1.108.29 for 超进化 20230808
+// @version      3.3.1.108.29 for 超进化 20230916
 // @description  try to take over the world!
 // @downloadURL  https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/MegaEvolve.js
 // @updateURL    https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/Meta/MegaEvolve.meta.js
@@ -4203,7 +4203,7 @@
         },
 
         isBuySellUnlocked(resource) {
-            return document.querySelector("#market-" + resource.id + " .order") !== null;
+            return !!getVueById(resource._marketVueBinding);
         },
 
         setMultiplier(multiplier) {
@@ -10231,7 +10231,7 @@
         }
 
         let nextTickKnowledge = resources.Knowledge.currentQuantity + resources.Knowledge.rateOfChange / ticksPerSecond();
-        let overflowKnowledge = nextTickKnowledge - resources.Knowledge.maxQuantity;
+        let overflowKnowledge = Math.min(nextTickKnowledge - resources.Knowledge.maxQuantity,resources.Knowledge.maxQuantity);
         if (overflowKnowledge <= 0) {
             return;
         }
@@ -18663,5 +18663,5 @@
     };
 
     $().ready(mainAutoEvolveScript);
-    console.log("脚本已载入：Evolve 3.3.1.108.28 for 超进化");
+    console.log("脚本已载入：Evolve 3.3.1.108.29 for 超进化 20230916");
 })($);
