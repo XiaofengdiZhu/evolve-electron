@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MegaEvolve
 // @namespace    http://tampermonkey.net/
-// @version      3.3.1.108.29 for 超进化 20230916
+// @version      3.3.1.108.29 for 超进化 20231026
 // @description  try to take over the world!
 // @downloadURL  https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/MegaEvolve.js
 // @updateURL    https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/Meta/MegaEvolve.meta.js
@@ -10704,7 +10704,7 @@
 
     function autoResearch() {
         for (let tech of state.unlockedTechs) {
-            if (tech.isAffordable() && !getCostConflict(tech) && tech.click()) {
+            if (tech.isUnlocked() && tech.isAffordable() && !getCostConflict(tech) && tech.click()) {
                 BuildingManager.updateBuildings(); // Cache cost if we just unlocked some building
                 ProjectManager.updateProjects();
                 return;
@@ -16592,11 +16592,11 @@
                                {val: "enabled", label: "启用", hint: "启用基因测序"},
                                {val: "disabled", label: "禁用", hint: "禁用基因测序"},
                                {val: "decode", label: "编译", hint: "仅编译基因, 不进行突变"}];
-        addSettingsSelect(currentNode, "基因序列", "测序", "管理基因编译及突变", sequenceOptions);
+        addSettingsSelect(currentNode, "geneticsSequence", "测序", "管理基因编译及突变", sequenceOptions);
         let boostOptions = [{val: "none", label: "忽略", hint: "忽略脚本设置，由游戏内置功能与玩家手动管理"},
                             {val: "enabled", label: "启用", hint: "启用基因加速合成"},
                             {val: "disabled", label: "禁用", hint: "禁用基因加速合成"}];
-        addSettingsSelect(currentNode, "基因加速", "加速测序", "管理测序加速合成", boostOptions);
+        addSettingsSelect(currentNode, "geneticsBoost", "加速测序", "管理测序加速合成", boostOptions);
         let assembleOptions = [{val: "none", label: "忽略", hint: "忽略脚本设置，由游戏内置功能与玩家手动管理"},
                                {val: "enabled", label: "启用", hint: "启用自动测序"},
                                {val: "disabled", label: "禁用", hint: "禁用自动测序"},
@@ -18016,9 +18016,9 @@
 
         // Previous game stats
         if ($("#statsPanel .cstat").length === 1) {
-            let backupString = win.LZString.decompressFromUTF16(localStorage.getItem('evolveBak'));
+            let backupString = localStorage.getItem('evolveBak');
             if (backupString) {
-                let oldStats = JSON.parse(backupString).stats;
+                let oldStats = JSON.parse(backupString.startsWith("ᯡ")?win.LZString.decompressFromUTF16(backupString):backupString).stats;
                 let statsData = {knowledge_spent: oldStats.know, starved_to_death: oldStats.starved, died_in_combat: oldStats.died, attacks_made: oldStats.attacks, game_days_played: oldStats.days};
                 if (oldStats.dkills > 0) {
                     statsData.demons_kills = oldStats.dkills;
@@ -18663,5 +18663,5 @@
     };
 
     $().ready(mainAutoEvolveScript);
-    console.log("脚本已载入：Evolve 3.3.1.108.29 for 超进化 20230916");
+    console.log("脚本已载入：Evolve 3.3.1.108.29 for 超进化 20231026");
 })($);
