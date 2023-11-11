@@ -32,8 +32,11 @@ if(process.platform==="win32"){
     });
 }
 let megaEvolvePath = path.join(__dirname.split("app.asar")[0], "MegaEvolve");
-let mainWindow,mainWindowID,monitorWindowWebContents,gameWindow,gameWindowWebContents,tampermonkeyWindow,tampermonkeyWindowOpened=false,messageChannelInitiated=false;
+let pmotschmannEvolvePath = path.join(__dirname.split("app.asar")[0], "PmotschmannEvolve");
+let mainWindow,mainWindowID,monitorWindowWebContents,gameWindow,gameWindowWebContents,tampermonkeyWindow,tampermonkeyWindowOpened=false,messageChannelInitiated=false,thisSession;
 const createWindows = () => {
+    let gameSource = store.get("gameSource")??"insidePmotschmann";
+    let offscreen = (gameSource === "inside" || gameSource === "xiaofengdizhu")&&(store.get("offscreen")??false);
     mainWindow = new BrowserWindow({
         icon: path.join(megaEvolvePath,'evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico'),
         title: 'evolve-electron by 销锋镝铸',
@@ -44,9 +47,10 @@ const createWindows = () => {
         autoHideMenuBar: store.get("mainWindow.autoHideMenuBar") ?? false,
         backgroundColor: nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"#292a2d":"#ffffff",
         webPreferences: {
-            preload: (store.get("offscreen")??false)?path.join(__dirname,'monitor','monitorPreload.js'):path.join(__dirname, 'gamePreload.js'),
-            backgroundThrottling: (store.get("offscreen")??false)||!(store.get("stopBackgroundThrottling")??true),
-            contextIsolation: true
+            preload: offscreen?path.join(__dirname,'monitor','monitorPreload.js'):path.join(__dirname, 'gamePreload.js'),
+            backgroundThrottling: offscreen||!(store.get("stopBackgroundThrottling")??true),
+            contextIsolation: true,
+            session: thisSession
         }
     });
     updateStartMenuIcon();
@@ -71,7 +75,7 @@ const createWindows = () => {
     mainWindow.on('page-title-updated', (event) => {
         event.preventDefault();
     });
-    if(store.get("offscreen")??false) {
+    if(offscreen) {
         gameWindow = new BrowserWindow({
             offscreen: true,
             show: false,
@@ -80,7 +84,8 @@ const createWindows = () => {
             webPreferences: {
                 preload: path.join(__dirname, 'gamePreload.js'),
                 backgroundThrottling: !(store.get("stopBackgroundThrottling")??true),
-                contextIsolation: true
+                contextIsolation: true,
+                session: thisSession
             }
         });
         monitorWindowWebContents = mainWindow.webContents;
@@ -97,13 +102,16 @@ const createWindows = () => {
         monitorWindowWebContents = null;
     }
     setupIpc();
-    session.defaultSession.loadExtension(path.join(__dirname.split("app.asar")[0], 'extensions', 'dhdgffkkebhmkfjojejmpbldmpobfkfo'), {allowFileAccess: true}).then(()=>{
+    thisSession.loadExtension(path.join(__dirname.split("app.asar")[0], 'extensions', 'dhdgffkkebhmkfjojejmpbldmpobfkfo'), {allowFileAccess: true}).then(()=>{
         switch(store.get("gameSource")){
             case "inside":
-                gameWindow.loadFile(path.join(megaEvolvePath,store.get("offscreen")??false?'no-style.html':'index.html')).then(firstLoadPage);
+                gameWindow.loadFile(path.join(megaEvolvePath,offscreen?'no-style.html':'index.html')).then(firstLoadPage);
+                break;
+            case "insidePmotschmann":
+                gameWindow.loadFile(path.join(pmotschmannEvolvePath,'index.html')).then(firstLoadPage);
                 break;
             case "xiaofengdizhu":
-                gameWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then(firstLoadPage);
+                gameWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/"+(offscreen?'no-style.html':'index.html')).then(firstLoadPage);
                 break;
             case "pmotschmann":
                 gameWindow.loadURL("https://pmotschmann.github.io/Evolve/").then(firstLoadPage);
@@ -112,9 +120,9 @@ const createWindows = () => {
                 gameWindow.loadURL("https://g8hh.github.io/evolve/").then(firstLoadPage);
                 break;
             default:
-                gameWindow.loadFile(path.join(megaEvolvePath,store.get("offscreen")??false?'no-style.html':'index.html')).then(firstLoadPage);
+                gameWindow.loadFile(path.join(pmotschmannEvolvePath,'index.html')).then(firstLoadPage);
         }
-        if(store.get("offscreen")??false){
+        if(offscreen){
             mainWindow.loadFile(path.join(__dirname,"monitor","monitor.html")).then();
         }
     });
@@ -174,8 +182,10 @@ app.whenReady().then(() => {
     if(store.get("powerSaveBlocker")??true){
         powerSaveBlockerID=powerSaveBlocker.start('prevent-app-suspension');
     }
+    let gameSource = store.get("gameSource")??"insidePmotschmann";
+    thisSession = (gameSource !== "inside" && gameSource !== "xiaofengdizhu")? session.fromPartition("persist:likePmotschmann"):session.defaultSession;
     new ElectronChromeExtensions({
-        session: session.defaultSession,
+        session: thisSession,
         createTab: (details) => {
             const win =
                 typeof details.windowId === 'number' &&
@@ -282,28 +292,37 @@ app.on('web-contents-created', (event, contents) => {
 })
 
 function setMainMenu() {
+    let gameSourceAtInit = store.get("gameSource")??"insidePmotschmann";
     const template = [
         {
             label: '选择版本',
             submenu: [
                 {
-                    label: "离线超进化版 from 销锋镝铸",
-                    sublabel: "无需网络",
+                    label: "隐藏",
                     type: "radio",
-                    checked: (store.get("gameSource")??"inside")==="inside",
-                    click() {
-                        store.set("gameSource","inside");
-                        gameWindow.loadFile(path.join(megaEvolvePath,store.get("offscreen")??false?'no-style.html':'index.html')).then();
-                    }
+                    checked: (()=>{
+                        let gameSource = store.get("gameSource")??"insidePmotschmann";
+                        return gameSourceAtInit==="inside" || gameSourceAtInit === "xiaofengdizhu";
+                    })(),
+                    visible: false
                 },
                 {
-                    label: "在线超进化版 from 销锋镝铸",
-                    sublabel: "https://xiaofengdizhu.github.io/MegaEvolve/",
+                    label: "离线原版 by pmotschmann",
+                    sublabel: "无需网络",
                     type: "radio",
-                    checked: store.get("gameSource")==="xiaofengdizhu",
+                    checked: (store.get("gameSource")??"insidePmotschmann")==="insidePmotschmann",
                     click() {
-                        store.set("gameSource","xiaofengdizhu");
-                        gameWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then();
+                        let gameSource = store.get("gameSource")??"insidePmotschmann";
+                        if(gameSource === "inside" || gameSource === "xiaofengdizhu"){
+                            store.set("gameSource","insidePmotschmann");
+                            app.relaunch();
+                            app.exit();
+                            return;
+                        }
+                        if(gameSource!=="insidePmotschmann"){
+                            store.set("gameSource","insidePmotschmann");
+                            gameWindow.loadFile(path.join(pmotschmannEvolvePath,'index.html')).then();
+                        }
                     }
                 },
                 {
@@ -312,8 +331,17 @@ function setMainMenu() {
                     type: "radio",
                     checked: store.get("gameSource")==="pmotschmann",
                     click() {
-                        store.set("gameSource","pmotschmann");
-                        gameWindow.loadURL("https://pmotschmann.github.io/Evolve/").then();
+                        let gameSource = store.get("gameSource")??"insidePmotschmann";
+                        if(gameSource === "inside" || gameSource === "xiaofengdizhu"){
+                            store.set("gameSource","pmotschmann");
+                            app.relaunch();
+                            app.exit();
+                            return;
+                        }
+                        if(gameSource!=="pmotschmann"){
+                            store.set("gameSource","pmotschmann");
+                            gameWindow.loadURL("https://pmotschmann.github.io/Evolve/").then();
+                        }
                     }
                 },
                 {
@@ -322,8 +350,65 @@ function setMainMenu() {
                     type: "radio",
                     checked: store.get("gameSource")==="g8hh",
                     click() {
-                        store.set("gameSource","g8hh");
-                        gameWindow.loadURL("https://g8hh.github.io/evolve/").then();
+                        let gameSource = store.get("gameSource")??"insidePmotschmann";
+                        if(gameSource === "inside" || gameSource === "xiaofengdizhu"){
+                            store.set("gameSource","g8hh");
+                            app.relaunch();
+                            app.exit();
+                            return;
+                        }
+                        if(gameSource!=="g8hh"){
+                            store.set("gameSource","g8hh");
+                            gameWindow.loadURL("https://g8hh.github.io/evolve/").then();
+                        }
+                    }
+                },
+                {type: 'separator'},
+                {
+                    label: "隐藏2",
+                    type: "radio",
+                    checked: (()=>{
+                        let gameSource = store.get("gameSource")??"insidePmotschmann";
+                        return gameSource !== "inside" && gameSource !== "xiaofengdizhu";
+                    })(),
+                    visible: false
+                },
+                {
+                    label: "离线超进化版 from 销锋镝铸",
+                    sublabel: "无需网络",
+                    type: "radio",
+                    checked: store.get("gameSource")==="inside",
+                    click() {
+                        let gameSource = store.get("gameSource")??"insidePmotschmann";
+                        if(gameSource !== "inside" && gameSource !== "xiaofengdizhu"){
+                            store.set("gameSource","inside");
+                            app.relaunch();
+                            app.exit();
+                            return;
+                        }
+                        if(gameSource!=="inside"){
+                            store.set("gameSource","inside");
+                            gameWindow.loadFile(path.join(megaEvolvePath,store.get("offscreen")??false?'no-style.html':'index.html')).then();
+                        }
+                    }
+                },
+                {
+                    label: "在线超进化版 from 销锋镝铸",
+                    sublabel: "https://xiaofengdizhu.github.io/MegaEvolve/",
+                    type: "radio",
+                    checked: store.get("gameSource")==="xiaofengdizhu",
+                    click() {
+                        let gameSource = store.get("gameSource")??"insidePmotschmann";
+                        if(gameSource !== "inside" && gameSource !== "xiaofengdizhu"){
+                            store.set("gameSource","xiaofengdizhu");
+                            app.relaunch();
+                            app.exit();
+                            return;
+                        }
+                        if(gameSource!=="xiaofengdizhu"){
+                            store.set("gameSource","xiaofengdizhu");
+                            gameWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/"+(store.get("offscreen")??false?'no-style.html':'index.html')).then();
+                        }
                     }
                 }
             ]
@@ -433,10 +518,14 @@ function setMainMenu() {
                     }
                 },
                 {
-                    label: "离屏渲染模式",
+                    label: "启用超进化离屏渲染",
                     sublabel: "自动重启后生效",
                     type: "checkbox",
                     checked: store.get("offscreen")??false,
+                    enabled: (()=>{
+                        let gameSource = store.get("gameSource")??"insidePmotschmann";
+                        return gameSource === "inside" || gameSource === "xiaofengdizhu";
+                    })(),
                     click() {
                         if(store.get("offscreen")??false){
                             store.set("offscreen",false);
@@ -509,9 +598,12 @@ function setMainMenu() {
                                     width:1080,
                                     height:800,
                                     autoHideMenuBar: true,
-                                    backgroundColor: nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"#292a2d":"#ffffff"
+                                    backgroundColor: nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"#292a2d":"#ffffff",
+                                    webPreferences:{
+                                        session: thisSession
+                                    }
                                 });
-                            tampermonkeyWindow.loadURL("chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html");
+                            tampermonkeyWindow.loadURL("chrome-extension://dhdgffkkebhmkfjojejmpbldmpobfkfo/options.html").then();
                             tampermonkeyWindow.on("close",() => {
                                 tampermonkeyWindowOpened = false;
                             });

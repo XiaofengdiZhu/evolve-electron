@@ -13953,6 +13953,8 @@
             el.onload = realBuildScriptSettings;
             el.onerror = () => alert("Can't load jQuery UI. Check browser console for details.");
             document.body.appendChild(el);
+        }else{
+            realBuildScriptSettings();
         }
         return;
     }

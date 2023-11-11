@@ -28,6 +28,7 @@ const options = {
     ],
     extraResources:[
         "MegaEvolve/**",
+        "PmotschmannEvolve/**",
         "extensions/**"
     ],
 
