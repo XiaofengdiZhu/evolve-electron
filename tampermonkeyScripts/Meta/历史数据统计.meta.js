@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         evolve历史数据统计
 // @namespace    http://tampermonkey.net/
-// @version      1.4.5.3 for 超进化 20231026
+// @version      1.4.5.3 for 超进化 20231111
 // @description  try to take over the world!
 // @downloadURL  https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/历史数据统计.js
 // @updateURL    https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/Meta/历史数据统计.meta.js

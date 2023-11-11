@@ -16,14 +16,14 @@
   },
   "devDependencies": {
     "@electron-forge/cli": "^6.4.2",
-    "electron": "^26.2.1",
+    "electron": "^27.0.4",
     "electron-builder": "24.6.4"
   },
   "dependencies": {
     "@electron/fuses": "^1.6.2",
-    "axios": "^1.5.0",
+    "axios": "^1.6.1",
     "electron-chrome-extensions": "^3.10.1",
-    "electron-log": "^4.4.8",
+    "electron-log": "^5.0.0",
     "electron-store": "^8.1.0",
     "ga4-mp": "^1.0.3",
     "node-notifier": "^10.0.1",

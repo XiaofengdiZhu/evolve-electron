@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MegaEvolve
 // @namespace    http://tampermonkey.net/
-// @version      3.3.1.108.29 for 超进化 20231026
+// @version      3.3.1.108.29 for 超进化 20231111
 // @description  try to take over the world!
 // @downloadURL  https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/MegaEvolve.js
 // @updateURL    https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/Meta/MegaEvolve.meta.js
@@ -13578,15 +13578,6 @@
             }
             translateFinish = true;
         }
-        // Make sure we have jQuery UI even if script was injected without *monkey
-        if (!$.ui) {
-            let el = document.createElement("script");
-            el.src = "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js";
-            el.onload = mainAutoEvolveScript;
-            el.onerror = () => alert("Can't load jQuery UI. Check browser console for details.");
-            document.body.appendChild(el);
-            return;
-        }
 
         // Wrappers for firefox, with code to bypass script sandbox. If we're not on firefox - don't use it, call real functions instead
         if (typeof unsafeWindow !== "object" || typeof cloneInto !== "function") {
@@ -13954,7 +13945,19 @@
         $("#script_settings").remove();
     }
 
-    function buildScriptSettings() {
+    function buildScriptSettings(){
+        // Make sure we have jQuery UI even if script was injected without *monkey
+        if (!$.ui && !Array.from(document.body.children).some(child=>child instanceof HTMLScriptElement && child.attributes.src.value === "/lib/jquery-ui.min.js")) {
+            let el = document.createElement("script");
+            el.src = "lib/jquery-ui.min.js";
+            el.onload = realBuildScriptSettings;
+            el.onerror = () => alert("Can't load jQuery UI. Check browser console for details.");
+            document.body.appendChild(el);
+        }
+        return;
+    }
+
+    function realBuildScriptSettings() {
         let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
 
         let scriptContentNode = $('#script_settings');

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         evolve历史数据统计
 // @namespace    http://tampermonkey.net/
-// @version      1.4.5.3 for 超进化 20231026
+// @version      1.4.5.3 for 超进化 20231111
 // @description  try to take over the world!
 // @downloadURL  https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/历史数据统计.js
 // @updateURL    https://github.com/XiaofengdiZhu/evolve-electron/raw/main/tampermonkeyScripts/Meta/历史数据统计.meta.js
@@ -329,7 +329,7 @@
         {
             historyData = [];
         }
-        let totalCount=0,totalDays = 0,totalTime = 0;
+        let totalCount=0,totalDays = 0,totalTime = 0,fatestTime = Number.MAX_VALUE,fatestDays = Number.MAX_VALUE;
         for(var i = 0; i < historyData.length; i++)
         {
             $("#recoList").append($(`<tr><td colspan="2" class="has-text-success">前${i+1}轮：</td></tr>`));
@@ -353,6 +353,8 @@
                     	totalTime += time;
                     	totalCount++;
                     	totalDays += historyData[i].game_days_played;
+                    	fatestTime = Math.min(fatestTime,time);
+                    	fatestDays = Math.min(fatestDays,historyData[i].game_days_played);
                         $("#recoList").append($(`<tr><td class="has-text-warning">历时：</td><td>${(time/3600000).toFixed(4)}小时</td></tr>`));
                         $("#recoList").append($(`<tr><td class="has-text-warning">倍速：</td><td>${(historyData[i].game_days_played*5000/time).toFixed(1)}</td></tr>`));
                     }
@@ -364,7 +366,7 @@
                 }
             }
         }
-        $("#recoFilter").append($(`<div class='has-text-advanced' style="max-width:20em">最近${totalCount}周目的平均倍速为${(totalDays*5000/totalTime).toFixed(1)}，平均历时${(totalTime/totalCount/3600000).toFixed(4)}小时，平均游戏天数${(totalDays/totalCount).toFixed(1)}</div>`));
+        $("#recoFilter").append($(`<div class='has-text-advanced' style="max-width:20em">最近${totalCount}周目的平均倍速为${(totalDays*5000/totalTime).toFixed(1)}，平均历时${(totalTime/totalCount/3600000).toFixed(4)}小时，平均游戏天数${(totalDays/totalCount).toFixed(1)}，最快历时${(fatestTime/1000).toFixed(3)}秒，最快游戏天数${fatestDays}</div>`));
     }
 
     function spireStat()

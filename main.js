@@ -85,7 +85,7 @@ const createWindows = () => {
         });
         monitorWindowWebContents = mainWindow.webContents;
         gameWindowWebContents = gameWindow.webContents;
-        gameWindowWebContents.frameRate = 1;
+        gameWindowWebContents.frameRate = 10;
         gameWindowWebContents.mainFrame.ipc.on('request-worker-channel', (event) => {
             const { port1, port2 } = new MessageChannelMain();
             monitorWindowWebContents.postMessage('port', null, [port1]);
@@ -93,13 +93,14 @@ const createWindows = () => {
         });
     }else{
         gameWindow = mainWindow;
+        gameWindowWebContents = gameWindow.webContents;
         monitorWindowWebContents = null;
     }
     setupIpc();
     session.defaultSession.loadExtension(path.join(__dirname.split("app.asar")[0], 'extensions', 'dhdgffkkebhmkfjojejmpbldmpobfkfo'), {allowFileAccess: true}).then(()=>{
         switch(store.get("gameSource")){
             case "inside":
-                gameWindow.loadFile(path.join(megaEvolvePath,'index.html')).then(firstLoadPage);
+                gameWindow.loadFile(path.join(megaEvolvePath,store.get("offscreen")??false?'no-style.html':'index.html')).then(firstLoadPage);
                 break;
             case "xiaofengdizhu":
                 gameWindow.loadURL("https://xiaofengdizhu.github.io/MegaEvolve/").then(firstLoadPage);
@@ -111,7 +112,7 @@ const createWindows = () => {
                 gameWindow.loadURL("https://g8hh.github.io/evolve/").then(firstLoadPage);
                 break;
             default:
-                gameWindow.loadFile(path.join(megaEvolvePath,'index.html')).then(firstLoadPage);
+                gameWindow.loadFile(path.join(megaEvolvePath,store.get("offscreen")??false?'no-style.html':'index.html')).then(firstLoadPage);
         }
         if(store.get("offscreen")??false){
             mainWindow.loadFile(path.join(__dirname,"monitor","monitor.html")).then();
@@ -257,7 +258,7 @@ app.on('web-contents-created', (event, contents) => {
     });
     contents.on('will-navigate', (event,url) => {
         let str = url.toLowerCase().split("#")[0];
-        if (str.endsWith("evolve/") || str.endsWith("evolve/index.html") || str.endsWith("evolve/wiki.html") || str.endsWith("options.html")) {
+        if (str.endsWith("evolve/") || str.endsWith("evolve/index.html") || str.endsWith("evolve/no-style.html") || str.endsWith("evolve/wiki.html") || str.endsWith("options.html")) {
 
         } else {
             event.preventDefault();
@@ -292,7 +293,7 @@ function setMainMenu() {
                     checked: (store.get("gameSource")??"inside")==="inside",
                     click() {
                         store.set("gameSource","inside");
-                        gameWindow.loadFile(path.join(megaEvolvePath,'index.html')).then();
+                        gameWindow.loadFile(path.join(megaEvolvePath,store.get("offscreen")??false?'no-style.html':'index.html')).then();
                     }
                 },
                 {
