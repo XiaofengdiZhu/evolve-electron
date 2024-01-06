@@ -1,1 +1,0 @@
-/*! Buefy v0.9.22 | MIT License | github.com/buefy/buefy */

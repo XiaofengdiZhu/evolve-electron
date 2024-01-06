@@ -11,8 +11,8 @@ const Platform = builder.Platform
  * @see https://www.electron.build/configuration/configuration
  */
 const options = {
-    "appId": "xfdz.evolve-electron",
-    "copyright": "Copyright © 2023 销锋镝铸",
+    appId: "evolve-client",
+    productName: "Evolve客户端",
     // "store” | “normal” | "maximum". - For testing builds, use 'store' to reduce build time significantly.
     compression: "maximum",
     removePackageScripts: true,
@@ -28,19 +28,11 @@ const options = {
         "evolved-withBackground.ico"
     ],
     extraResources:[
-        "MegaEvolve/**",
         "PmotschmannEvolve/**",
         "extensions/**"
     ],
 
     win: {
-        "publish": [
-            {
-                "provider": "github",
-                "owner": "XiaofengdiZhu",
-                "repo": "evolve-electron"
-            }
-        ],
         "target": [
             {
                 "target": "nsis",

@@ -1,23 +1,17 @@
 {
-  "name": "evolve-electron",
-  "version": "v1.4.1",
+  "name": "evolve-client",
+  "version": "v1.3.9",
   "description": "An Electron app that you can play Evolve in it.一个用于玩Evolve的Electron套壳软件",
-  "homepage": "https://github.com/XiaofengdiZhu/evolve-electron",
   "main": "main.js",
   "scripts": {
     "start": "electron-forge start",
     "build": "node builder.js"
   },
-  "author": "销锋镝铸",
   "license": "MPL-2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/XiaofengdiZhu/evolve-electron.git"
-  },
   "devDependencies": {
     "@electron-forge/cli": "^7.2.0",
     "electron": "^28.1.1",
-    "electron-builder": "24.9.1"
+    "electron-builder": "^24.9.1"
   },
   "dependencies": {
     "@electron/fuses": "^1.7.0",
