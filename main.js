@@ -9,8 +9,16 @@ const {
     session,
     crashReporter,
     ipcMain,
-    MessageChannelMain
+    MessageChannelMain,
+    Tray,
+    nativeImage
 } = require('electron');
+
+if (!app.requestSingleInstanceLock()) {
+    app.quit();
+    throw null;
+}
+
 const path = require('path');
 const Store = require('electron-store');
 const prompt = require('./electron-prompt/index.js');
@@ -25,6 +33,7 @@ crashReporter.start({ uploadToServer: false });
 const store = new Store();
 log.catchErrors();
 let ga4;
+let tray;
 if(process.platform==="win32"){
     const WindowsToaster = notifier.WindowsToaster;
     notifier = new WindowsToaster({
@@ -38,7 +47,7 @@ const createWindows = () => {
     let gameSource = store.get("gameSource")??"insidePmotschmann";
     let offscreen = (gameSource === "inside" || gameSource === "xiaofengdizhu")&&(store.get("offscreen")??false);
     mainWindow = new BrowserWindow({
-        icon: path.join(megaEvolvePath,'evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico'),
+        icon: path.join(__dirname, "evolved-withBackground.ico"),
         title: 'evolve-electron by 销锋镝铸',
         width: store.get("mainWindow.bounds.width") ?? 1080,
         height: store.get("mainWindow.bounds.height") ?? 800,
@@ -57,8 +66,42 @@ const createWindows = () => {
     mainWindowID = mainWindow.id;
     setMainMenu();
     if (store.get('mainWindow.isMaximized')) mainWindow.maximize();
+    mainWindow.on('minimize', () => {
+        if(store.get("minimizedToTray")??false){
+            tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "evolved-withBackground.ico")));
+            tray.setToolTip('evolve-electron');
+            tray.on('double-click',() => {
+                tray.destroy();
+                mainWindow.show();
+            });
+            tray.setContextMenu(Menu.buildFromTemplate([
+                {
+                    label: 'evolve-electron ' + app.getVersion(),
+                    enabled: false
+                },
+                {
+                    label: '打开主窗口',
+                    click(){
+                        tray.destroy();
+                        mainWindow.show();
+                    }
+                },
+                {
+                    label: '退出',
+                    click(){
+                        tray.destroy();
+                        mainWindow.close();
+                    }
+                }
+            ]));
+            mainWindow.hide();
+        }
+    });
     mainWindow.on('closed', () => {
         BrowserWindow.getAllWindows().forEach(window => window.close());
+        if(tray){
+            tray.destroy();
+        }
     });
     mainWindow.on('resized', () => {
         saveMainWindowInfo();
@@ -173,7 +216,7 @@ app.setAboutPanelOptions({
     applicationVersion: app.getVersion(),
     copyright: "by 销锋镝铸",
     credits: "an Electron app that you can play Evolve in it.\n一个用于玩Evolve的Electron套壳软件",
-    iconPath: path.join(megaEvolvePath,'evolved.ico'),
+    iconPath: path.join(__dirname, "evolved-withBackground.ico"),
     website:"https://github.com/XiaofengdiZhu/evolve-electron"
 });
 app.enableSandbox();
@@ -242,7 +285,7 @@ app.on('web-contents-created', (event, contents) => {
             return {
                 action: "allow",
                 overrideBrowserWindowOptions:{
-                    icon: path.join(megaEvolvePath,'evolved'+(nativeTheme.themeSource==="dark"||(nativeTheme.themeSource==="system"&&nativeTheme.shouldUseDarkColors)?"-light":"")+'.ico'),
+                    icon: path.join(__dirname, "evolved-withBackground.ico"),
                     width:1080,
                     height:800,
                     autoHideMenuBar: true,
@@ -283,7 +326,7 @@ app.on('web-contents-created', (event, contents) => {
             appID: "evolve-electron",
             title: "错误",
             message: "渲染进程崩溃了，已尝试刷新页面\n错误代码：" + details.exitCode + "；原因：" + details.reason,
-            icon: path.join(megaEvolvePath,"evolved-withBackground.ico"),
+            icon: path.join(__dirname, "evolved-withBackground.ico"),
             sound: false,
             wait: false,
             timeout: 5
@@ -291,8 +334,16 @@ app.on('web-contents-created', (event, contents) => {
     });
 })
 
+app.on('second-instance', () => {
+    if (mainWindow) {
+        mainWindow.show();
+        if(tray){
+            tray.destroy();
+        }
+    }
+});
+
 function setMainMenu() {
-    let gameSourceAtInit = store.get("gameSource")??"insidePmotschmann";
     const template = [
         {
             label: '选择版本',
@@ -302,7 +353,7 @@ function setMainMenu() {
                     type: "radio",
                     checked: (()=>{
                         let gameSource = store.get("gameSource")??"insidePmotschmann";
-                        return gameSourceAtInit==="inside" || gameSourceAtInit === "xiaofengdizhu";
+                        return gameSource==="inside" || gameSource === "xiaofengdizhu";
                     })(),
                     visible: false
                 },
@@ -426,7 +477,6 @@ function setMainMenu() {
                             click() {
                                 nativeTheme.themeSource = "system";
                                 BrowserWindow.getAllWindows().forEach((win) => {
-                                    win.setIcon(path.join(megaEvolvePath,'evolved'+(nativeTheme.shouldUseDarkColors?"-light":"")+'.ico'));
                                     win.setBackgroundColor(nativeTheme.shouldUseDarkColors?"#292a2d":"#ffffff");
                                 });
                                 store.set("mainWindow.theme", "system");
@@ -439,7 +489,6 @@ function setMainMenu() {
                             click() {
                                 nativeTheme.themeSource = "light";
                                 BrowserWindow.getAllWindows().forEach((win) => {
-                                    win.setIcon(path.join(megaEvolvePath,'evolved.ico'));
                                     win.setBackgroundColor("#ffffff");
                                 });
                                 store.set("mainWindow.theme", "light");
@@ -452,7 +501,6 @@ function setMainMenu() {
                             click() {
                                 nativeTheme.themeSource = "dark";
                                 BrowserWindow.getAllWindows().forEach((win) => {
-                                    win.setIcon(path.join(megaEvolvePath,'evolved-light.ico'));
                                     win.setBackgroundColor("#292a2d");
                                 });
                                 store.set("mainWindow.theme", "dark");
@@ -480,11 +528,23 @@ function setMainMenu() {
                                 appID: "evolve-electron",
                                 title: "提示",
                                 message: "按键盘上的Alt显示菜单栏",
-                                icon: path.join(megaEvolvePath,"evolved-withBackground.ico"),
+                                icon: path.join(__dirname, "evolved-withBackground.ico"),
                                 sound: false,
                                 wait: false,
                                 timeout: 5
                             });
+                        }
+                    }
+                },
+                {
+                    label: "最小化到托盘",
+                    type: "checkbox",
+                    checked: store.get("minimizedToTray")??false,
+                    click() {
+                        if(store.get("minimizedToTray")??false){
+                            store.set("minimizedToTray",false);
+                        }else{
+                            store.set("minimizedToTray",true);
                         }
                     }
                 },
@@ -548,6 +608,10 @@ function setMainMenu() {
                 {
                     label: "开发者工具",
                     sublabel: "游戏窗口",
+                    visible: (()=>{
+                        let gameSource = store.get("gameSource")??"insidePmotschmann";
+                        return (gameSource === "inside" || gameSource === "xiaofengdizhu")&&(store.get("offscreen"));
+                    })(),
                     click() {
                         gameWindowWebContents.openDevTools({mode:"detach"});
                     }
@@ -616,6 +680,10 @@ function setMainMenu() {
                 {
                     label: "下载超进化脚本",
                     id: "openMegaEvolveScriptsWebsite",
+                    visible:(()=>{
+                        let gameSource = store.get("gameSource")??"insidePmotschmann";
+                        return gameSource === "inside" || gameSource === "xiaofengdizhu";
+                    })(),
                     click() {
                         shell.openExternal("https://github.com/XiaofengdiZhu/evolve-electron/tree/main/tampermonkeyScripts").then();
                     }
@@ -678,7 +746,7 @@ function checkUpdate() {
                         appID: "evolve-electron",
                         title: "检测更新成功",
                         message: "无新版本",
-                        icon: path.join(megaEvolvePath,"evolved-withBackground.ico"),
+                        icon: path.join(__dirname, "evolved-withBackground.ico"),
                         sound: false,
                         wait: false,
                         timeout: 5
@@ -717,7 +785,7 @@ function checkUpdateFailed(){
             appID: "evolve-electron",
             title: "检测更新失败",
             message: "您可以点击此处前往Github Release页面主动检查是否有新版本，当前版本为"+ app.getVersion(),
-            icon: path.join(megaEvolvePath,"evolved-withBackground.ico"),
+            icon: path.join(__dirname, "evolved-withBackground.ico"),
             sound: false,
             wait: false,
             actions: ["前往Github Release"],

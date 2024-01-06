@@ -24,7 +24,8 @@ const options = {
         "main.js",
         "gamePreload.js",
         "monitor/**",
-        "electron-prompt/**"
+        "electron-prompt/**",
+        "evolved-withBackground.ico"
     ],
     extraResources:[
         "MegaEvolve/**",
