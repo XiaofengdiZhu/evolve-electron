@@ -111,9 +111,15 @@ const createWindows = () => {
     });
     mainWindow.on('maximize', () => {
         saveMainWindowInfo();
+        if(tray){
+            tray.destroy();
+        }
     });
     mainWindow.on('unmaximize', () => {
         saveMainWindowInfo();
+        if(tray){
+            tray.destroy();
+        }
     });
     mainWindow.on('page-title-updated', (event) => {
         event.preventDefault();
@@ -564,7 +570,7 @@ function setMainMenu() {
                     }
                 },
                 {
-                    label: "不限制网页后台",
+                    label: "不限制后台运行",
                     type: "checkbox",
                     checked: store.get("stopBackgroundThrottling")??true,
                     click() {
