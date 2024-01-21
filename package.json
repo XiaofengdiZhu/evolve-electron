@@ -1,6 +1,6 @@
 {
   "name": "evolve-client",
-  "version": "v1.3.9",
+  "version": "v1.3.9-2",
   "description": "An Electron app that you can play Evolve in it.一个用于玩Evolve的Electron套壳软件",
   "main": "main.js",
   "scripts": {
