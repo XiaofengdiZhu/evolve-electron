@@ -554,6 +554,22 @@ function setMainMenu() {
                         }
                     }
                 },
+                {
+                    label: "开机自启",
+                    type: "checkbox",
+                    checked: store.get("openAtLogin")??false,
+                    click() {
+                        if(app.isPackaged){
+                            if(store.get("openAtLogin")??false){
+                                store.set("openAtLogin",false);
+                                app.setLoginItemSettings({openAtLogin:false});
+                            }else{
+                                store.set("openAtLogin",true);
+                                app.setLoginItemSettings({openAtLogin:true});
+                            }
+                        }
+                    }
+                },
                 {type: 'separator'},
                 {
                     label: "保持系统活动状态",
