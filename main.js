@@ -134,6 +134,35 @@ const createWindows = () => {
                 gameWindow.loadFile(path.join(pmotschmannEvolvePath,'index.html')).then(firstLoadPage);
         }
     });
+    thisSession.on("will-download", (event, item) => {
+        if(store.get("downloadDirectly")??false){
+            let p = path.join(store.get("downloadDirectory")??app.getPath("downloads"), item.getFilename());
+            item.setSavePath(p);
+            item.once('done', (event, state) => {
+                if (state === 'completed') {
+                    notifier.notify({
+                        appID: "Evolve客户端",
+                        title: "导出成功",
+                        message: p,
+                        icon: path.join(__dirname, "evolved-withBackground.ico"),
+                        sound: false,
+                        wait: false,
+                        timeout: 5
+                    });
+                } else {
+                    notifier.notify({
+                        appID: "Evolve客户端",
+                        title: "导出失败",
+                        message: "请尝试重新设置导出目录",
+                        icon: path.join(__dirname, "evolved-withBackground.ico"),
+                        sound: false,
+                        wait: false,
+                        timeout: 5
+                    });
+                }
+            });
+        }
+    });
 }
 
 function firstLoadPage() {
@@ -302,6 +331,7 @@ app.on('second-instance', () => {
     }
 });
 
+let mainMenu;
 function setMainMenu() {
     const template = [
         {
@@ -456,6 +486,32 @@ function setMainMenu() {
                         }
                     }
                 },
+                {
+                    label: "直接保存导出的文件",
+                    type: "checkbox",
+                    checked: store.get("downloadDirectly")??false,
+                    click() {
+                        if(store.get("downloadDirectly")??false){
+                            store.set("downloadDirectly",false);
+                            mainMenu.getMenuItemById("downloadDirectory").enabled = false;
+                        }else{
+                            store.set("downloadDirectly",true);
+                            mainMenu.getMenuItemById("downloadDirectory").enabled = true;
+                        }
+                    }
+                },
+                {
+                    label: "设置导出目录",
+                    id: "downloadDirectory",
+                    enabled: store.get("downloadDirectly")??false,
+                    click() {
+                        dialog.showOpenDialog({title:"请选择导出目录", defaultPath:store.get("downloadDirectory")??app.getPath("downloads"), properties:["openDirectory", "promptToCreate"]}).then((result) => {
+                            if(!result.canceled){
+                                store.set("downloadDirectory",result.filePaths[0]);
+                            }
+                        });
+                    }
+                },
                 {type: 'separator'},
                 {
                     label: "保持系统活动状态",
@@ -554,7 +610,8 @@ function setMainMenu() {
             role: 'about'
         }
     ];
-    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+    mainMenu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(mainMenu);
 }
 
 function updateStartMenuIcon() {
