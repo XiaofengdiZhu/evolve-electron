@@ -31,7 +31,6 @@ const options = {
         "PmotschmannEvolve/**",
         "extensions/**"
     ],
-
     win: {
         "target": [
             {
